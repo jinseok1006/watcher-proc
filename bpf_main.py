@@ -5,6 +5,7 @@ and write logs per container. (Manual function approach)
 
 This version converts the BPF monotonic timestamp to wall-clock time
 using a computed offset, and prints the time in "YYYY-MM-DD HH:MM:SS" format.
+Also, the kernel-side process filtering is refactored for readability.
 """
 
 import os
@@ -38,9 +39,39 @@ struct data_t {
     char comm[TASK_COMM_LEN];
 };
 
+// 화이트리스트 프로세스 정의
+static const char *whitelist[] = {
+    "gcc",
+    "java", 
+    "python"
+};
+
 BPF_PERF_OUTPUT(events);
 
-// 직접 함수 정의 (이름: sched_proc_exec_handler)
+// inline 함수: 문자열 s가 whitelist의 prefix들 중 하나로 시작하는지 판단
+static __always_inline int is_whitelisted(const char *s) {
+    #pragma unroll
+    for (int i = 0; i < sizeof(whitelist)/sizeof(whitelist[0]); i++) {
+        int match = 1;
+        const char *prefix = whitelist[i];
+        
+        #pragma unroll
+        for (int j = 0; j < 8; j++) {
+            if (prefix[j] == '\0')
+                break;
+            if (s[j] != prefix[j]) {
+                match = 0;
+                break;
+            }
+        }
+        
+        if (match)
+            return 1;
+    }
+    return 0;
+}
+
+// 직접 함수 정의 (이름: sched_proc_exec_handler) 
 int sched_proc_exec_handler(struct trace_event_raw_sched_process_exec *ctx)
 {
     struct data_t data = {};
@@ -53,12 +84,8 @@ int sched_proc_exec_handler(struct trace_event_raw_sched_process_exec *ctx)
 
     bpf_get_current_comm(&data.comm, sizeof(data.comm));
 
-    // (선택) 특정 프로세스 필터링 (예: gcc, python, ./)
-    if (!(
-        (data.comm[0] == 'g' && data.comm[1] == 'c' && data.comm[2] == 'c') ||
-        (data.comm[0] == 'p') ||
-        (data.comm[0] == '.' && data.comm[1] == '/')
-    )) {
+    // 화이트리스트 기반 프로세스 필터링
+    if (!is_whitelisted(data.comm)) {
         return 0;
     }
 
