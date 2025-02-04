@@ -33,8 +33,6 @@ struct data_t {
 // 추적할 프로세스 목록
 static const char *whitelist[] = {
     "gcc",
-    "java", 
-    "python"
 };
 
 BPF_PERF_OUTPUT(events);
@@ -85,9 +83,6 @@ int sched_proc_exec_handler(struct pt_regs *ctx)
 }
 """.strip()
 
-# 로그 파일 설정
-BASE_LOG_DIR = "/var/log/containers"
-LOG_FILE_NAME = "execsnoop.log"
 
 # BPF 프로그램 초기화 및 이벤트 핸들러 연결
 bpf = BPF(text=BPF_PROGRAM)
@@ -147,13 +142,8 @@ def handle_event(cpu, data, size):
     # 로그 메시지 생성
     msg = f"[{formatted_time}] Container={container_hash} PID={pid} Process={comm}\n"
 
-    # 콘솔 출력 및 파일 기록
+    # 콘솔 출력
     print(msg, end="")
-    container_dir = os.path.join(BASE_LOG_DIR, container_hash)
-    os.makedirs(container_dir, exist_ok=True)
-    log_path = os.path.join(container_dir, LOG_FILE_NAME)
-    with open(log_path, "a") as f:
-        f.write(msg)
 
 # 메인 실행 루프
 if __name__ == "__main__":
