@@ -7,13 +7,12 @@ class ContainerPIDMap:
     def add(self, pid, container_hash):
         self.data_map[pid] = container_hash
     
-    # PID 기반 삭제 (O(1))
+    # PID 기반 삭제 (O(1)) - 안전한 삭제로 수정
     def remove(self, pid):
-        del self.data_map[pid]
+        if pid in self.data_map:  # 존재 여부 확인 추가
+            del self.data_map[pid]
     
-    # 조회 및 전체 확인 메소드 유지
+    # 조회 및 전체 확인 메소드 유지 - pop으로 안전하게 가져오기
     def get(self, pid):
-        tmp= self.data_map.get(pid)
-        self.remove(pid)
-        return tmp
+        return self.data_map.pop(pid, None)  # pop with default
     

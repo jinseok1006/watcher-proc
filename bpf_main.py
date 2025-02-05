@@ -40,6 +40,10 @@ struct data_t {
 // 추적할 프로세스 목록
 static const char *whitelist[] = {
     "gcc",
+    "java",
+    "python",
+    "node",
+    "g++",
 };
 
 BPF_PERF_OUTPUT(events);
@@ -157,29 +161,33 @@ def handle_event(cpu, data, size):
     event = bpf["events"].event(data)
     pid = event.pid
     comm = event.comm.decode("utf-8", "replace")
-    
-    # 이벤트 타입에 따라 분기 처리
-    if event.event_type == 0:  # EXEC 이벤트
-        container_hash = get_container_id(pid)
-        if container_hash:
-            container_hash_pid_map.add(pid, container_hash)
-        return
-    
-    # EXIT 이벤트 처리
-    exit_code = event.exit_code
-    container_hash = container_hash_pid_map.get(pid)  # 맵에서 가져오면서 삭제
-    
-    if not container_hash:
-        return
 
     # 시간 변환 및 포맷팅
     timestamp_monotonic = event.timestamp / 1e9
     timestamp_epoch = timestamp_monotonic + time_offset
     formatted_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp_epoch))
+    
+    # 이벤트 타입에 따라 분기 처리
+    if event.event_type == 0:  # EXEC 이벤트
+        container_hash = get_container_id(pid)
+        
+        if container_hash:
+            container_hash_pid_map.add(pid, container_hash)
+            msg = f"[{formatted_time}] EXEC Container={container_hash} PID={pid} Process={comm}\n"
+            print(msg, end="")
+
+        return
+    
+    # EXIT 이벤트 처리
+    exit_code = event.exit_code
+    container_hash = container_hash_pid_map.get(pid)  # pop으로 안전하게 가져오기
+    
+    if not container_hash:  # None인 경우 early return
+        return
 
     # 성공/실패 메시지 생성
     status = "Success" if exit_code == 0 else f"Failure (Exit Code: {exit_code})"
-    msg = f"[{formatted_time}] Container={container_hash} PID={pid} Process={comm} Status={status}\n"
+    msg = f"[{formatted_time}] EXIT Container={container_hash} PID={pid} Process={comm} Status={status}\n"
 
     # 콘솔 출력
     print(msg, end="")
