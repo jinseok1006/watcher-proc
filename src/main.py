@@ -27,6 +27,15 @@ enum event_type {
     PROC_EVENT_EXIT
 };
 
+// sched:sched_process_exit 트레이스포인트 구조체 정의
+struct sched_process_exit_args {
+    unsigned short common_type;
+    unsigned char common_flags;
+    unsigned char common_preempt_count;
+    int common_pid;
+    long int code;  // exit code 필드
+};
+
 // 이벤트 데이터 구조체
 struct data_t {
     enum event_type event_type;
@@ -44,6 +53,7 @@ static const char *whitelist[] = {
     "python",
     "node",
     "g++",
+    "gdb"
 };
 
 BPF_PERF_OUTPUT(events);
@@ -72,14 +82,14 @@ static __always_inline int is_whitelisted(const char *s) {
 }
 
 // 프로세스 종료 핸들러 수정
-int sched_proc_exit_handler(struct pt_regs *ctx, long exit_code) {
+int sched_proc_exit_handler(struct sched_process_exit_args *ctx) {
     struct data_t data = {};
     data.event_type = PROC_EVENT_EXIT;
 
     data.pid = bpf_get_current_pid_tgid() >> 32;
     data.timestamp = bpf_ktime_get_ns();
     data.cgroup_id = bpf_get_current_cgroup_id();
-    data.exit_code = exit_code;  // 매개변수에서 직접 추출
+    data.exit_code = ctx->code;  // tracepoint 구조체에서 exit code 추출
     
     bpf_get_current_comm(&data.comm, sizeof(data.comm));
     
@@ -117,11 +127,19 @@ int sched_proc_exec_handler(struct pt_regs *ctx)
 
 # BPF 프로그램 초기화 및 이벤트 핸들러 연결
 bpf = BPF(text=BPF_PROGRAM)
-bpf.attach_kprobe(event="do_exit", fn_name="sched_proc_exit_handler")
+bpf.attach_tracepoint(tp="sched:sched_process_exit", fn_name="sched_proc_exit_handler")
 bpf.attach_tracepoint(tp="sched:sched_process_exec", fn_name="sched_proc_exec_handler")
 
-container_hash_pid_map = ContainerPIDMap()
+class HashPIDMap:
+    def __init__(self):
+        self.map = {}
 
+    def add(self, pid: int, pod_name: str):
+        self.map[pid] = pod_name
+
+    def get(self, pid: int) -> str:
+        return self.map.pop(pid)
+hash_pid_map = HashPIDMap()
 
 def get_container_id(pid: int) -> str:
     """
@@ -147,6 +165,7 @@ def get_container_id(pid: int) -> str:
                 if m:
                     return m.group(1)
     except Exception:
+        print(f"[ERROR] cgroup 파일 읽기 실패 (PID: {pid})")
         return ""
     return ""
 
@@ -172,7 +191,7 @@ def handle_event(cpu, data, size):
         container_hash = get_container_id(pid)
         
         if container_hash:
-            container_hash_pid_map.add(pid, container_hash)
+            hash_pid_map.add(pid, container_hash)
             msg = f"[{formatted_time}] EXEC Container={container_hash} PID={pid} Process={comm}\n"
             print(msg, end="")
 
@@ -180,7 +199,7 @@ def handle_event(cpu, data, size):
     
     # EXIT 이벤트 처리
     exit_code = event.exit_code
-    container_hash = container_hash_pid_map.get(pid)  # pop으로 안전하게 가져오기
+    container_hash = hash_pid_map.get(pid)  # pop으로 안전하게 가져오기
     
     if not container_hash:  # None인 경우 early return
         return
