@@ -5,219 +5,63 @@
 - 컨테이너 cgroup 정보 파싱
 - GCC 실행 결과(성공/실패) 추적
 """
-import os
-import time
-import re
 from bcc import BPF
+from time_utils import TimeManager
+from container_utils import get_container_id, HashPIDMap
 
-# 시간 오프셋 계산
-start_monotonic_ns = time.monotonic_ns()
-start_epoch = time.time()
-time_offset = start_epoch - (start_monotonic_ns / 1e9)
+# BPF 프로그램 로드
+with open('src/bpf_program.c', 'r') as f:
+    bpf_program = f.read()
 
-BPF_PROGRAM = r"""
-#include <uapi/linux/ptrace.h>
-#include <linux/sched.h>
-#include <linux/trace_events.h>  // 트레이스포인트 구조체 정의 포함
-
-// 이벤트 타입 식별을 위한 열거형
-enum event_type {
-    PROC_EVENT_EXEC,
-    PROC_EVENT_EXIT
-};
-
-// 이벤트 데이터 구조체
-struct data_t {
-    enum event_type event_type;
-    u32 pid;
-    u64 timestamp;
-    u64 cgroup_id;
-    int exit_code;
-    char comm[TASK_COMM_LEN];
-};
-
-// 추적할 프로세스 목록
-static const char *whitelist[] = {
-    "gcc",
-    "java",
-    "python",
-    "node",
-    "g++",
-    "gdb"
-};
-
-BPF_PERF_OUTPUT(events);
-
-// 프로세스 이름이 화이트리스트에 포함되는지 확인하는 함수
-static __always_inline int is_whitelisted(const char *s) {
-    #pragma unroll
-    for (int i = 0; i < sizeof(whitelist)/sizeof(whitelist[0]); i++) {
-        int match = 1;
-        const char *prefix = whitelist[i];
-        
-        #pragma unroll
-        for (int j = 0; j < 8; j++) {
-            if (prefix[j] == '\0')
-                break;
-            if (s[j] != prefix[j]) {
-                match = 0;
-                break;
-            }
-        }
-        
-        if (match)
-            return 1;
-    }
-    return 0;
-}
-
-// 매크로 수정
-#define EXIT_CODE(x) ((x >> 8) & 0xff)  // 상위 바이트가 실제 exit code
-
-// 프로세스 종료 핸들러 시그니처 변경
-int sched_proc_exit_handler(struct pt_regs *ctx)
-{
-    struct data_t data = {};
-    data.event_type = PROC_EVENT_EXIT;
-
-    // 프로세스 정보 수집
-    data.pid = bpf_get_current_pid_tgid() >> 32;
-    data.timestamp = bpf_ktime_get_ns();
-    data.cgroup_id = bpf_get_current_cgroup_id();
-    
-    // task_struct에서 exit code 추출
-    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
-    data.exit_code = (task->exit_code >> 8) & 0xff;
-    
-    bpf_get_current_comm(&data.comm, sizeof(data.comm));
-    
-    if (!is_whitelisted(data.comm)) {
-        return 0;
-    }
-    
-    events.perf_submit(ctx, &data, sizeof(data));
-    return 0;
-}
-
-int sched_proc_exec_handler(struct pt_regs *ctx)
-{
-    struct data_t data = {};
-    data.event_type = PROC_EVENT_EXEC;
-
-    // 프로세스 정보 수집
-    u32 pid = bpf_get_current_pid_tgid() >> 32;
-    data.pid = pid;
-    data.timestamp = bpf_ktime_get_ns();
-    data.cgroup_id = bpf_get_current_cgroup_id();
-
-    bpf_get_current_comm(&data.comm, sizeof(data.comm));
-
-    // 화이트리스트 검사
-    if (!is_whitelisted(data.comm)) {
-        return 0;
-    }
-
-    events.perf_submit(ctx, &data, sizeof(data));
-    return 0;
-}
-""".strip()
-
-
-# BPF 프로그램 초기화 및 이벤트 핸들러 연결
-bpf = BPF(text=BPF_PROGRAM)
-bpf.attach_tracepoint(tp="sched:sched_process_exit", fn_name="sched_proc_exit_handler")
-bpf.attach_tracepoint(tp="sched:sched_process_exec", fn_name="sched_proc_exec_handler")
-
-
-class HashPIDMap:
+class ProcessTracer:
     def __init__(self):
-        self.map = {}
+        self.bpf = BPF(text=bpf_program)
+        self.time_manager = TimeManager()
+        self.hash_pid_map = HashPIDMap()
+        
+        # 트레이스포인트 연결
+        self.bpf.attach_tracepoint(tp="sched:sched_process_exit", fn_name="sched_proc_exit_handler")
+        self.bpf.attach_tracepoint(tp="sched:sched_process_exec", fn_name="sched_proc_exec_handler")
 
-    def add(self, pid: int, pod_name: str):
-        self.map[pid] = pod_name
+    def handle_event(self, cpu, data, size):
+        """이벤트 처리 함수"""
+        event = self.bpf["events"].event(data)
+        pid = event.pid
+        comm = event.comm.decode("utf-8", "replace")
+        formatted_time = self.time_manager.get_formatted_time(event.timestamp)
 
-    def get(self, pid: int) -> str:
-        return self.map.pop(pid)
+        if event.event_type == 0:  # EXEC 이벤트
+            container_hash = get_container_id(pid)
+            if container_hash:
+                self.hash_pid_map.add(pid, container_hash)
+                msg = f"[{formatted_time}] EXEC Container={container_hash} PID={pid} Process={comm}\n"
+                print(msg, end="")
+            return
 
+        # EXIT 이벤트 처리
+        try:
+            container_hash = self.hash_pid_map.get(pid)
+        except KeyError:
+            # 프로세스 감시 시작 전에 실행된 프로세스인 경우
+            print(f"[{formatted_time}] EXIT PID={pid} Process={comm} (감시 대상 아님) (Exit Code: {event.exit_code})\n")
+            return
 
-hash_pid_map = HashPIDMap()
+        exit_code = event.exit_code
+        status = "Success" if exit_code == 0 else f"Failure"
+        msg = f"[{formatted_time}] EXIT Container={container_hash} PID={pid} Process={comm} Status={status} (Exit Code: {exit_code})\n"
+        print(msg, end="")
 
-
-def get_container_id(pid: int) -> str:
-    """
-    PID를 이용해 컨테이너 ID 추출
-    - /proc/<pid>/cgroup 파일에서 Docker 컨테이너 해시 검색
-    - 컨테이너가 아닌 경우 빈 문자열 반환
-    """
-    cgroup_file = f"/proc/{pid}/cgroup"
-    if not os.path.exists(cgroup_file):
-        return "unknown"
-    try:
-        with open(cgroup_file, "r") as f:
-            for line in f:
-                parts = line.strip().split(":", 2)
-                if len(parts) < 3:
-                    continue
-                cgroup_path = parts[2]
-                # Docker 컨테이너 ID 패턴 검색
-                m = re.search(r"/docker/([0-9a-f]{12,64})", cgroup_path)
-                if m:
-                    return m.group(1)
-                m = re.search(r"docker-([0-9a-f]{12,64})\.scope", cgroup_path)
-                if m:
-                    return m.group(1)
-    except Exception:
-        return "unknown"
-
-
-def handle_event(cpu, data, size):
-    """
-    이벤트 처리 함수
-    - 이벤트 데이터 파싱
-    - 시간 변환 및 포맷팅
-    - 로그 파일 기록
-    """
-    # print(cpu, data, size)
-    event = bpf["events"].event(data)
-    pid = event.pid
-    comm = event.comm.decode("utf-8", "replace")
-
-    # 시간 변환 및 포맷팅
-    timestamp_monotonic = event.timestamp / 1e9
-    timestamp_epoch = timestamp_monotonic + time_offset
-    formatted_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp_epoch))
-
-    # 이벤트 타입에 따라 분기 처리
-    if event.event_type == 0:  # EXEC 이벤트
-        container_hash = get_container_id(pid)
-
-        if container_hash:
-            hash_pid_map.add(pid, container_hash)
-            msg = f"[{formatted_time}] EXEC Container={container_hash} PID={pid} Process={comm}\n"
-            print(msg, end="")
-
-        return
-
-    # EXIT 이벤트 처리
-    exit_code = event.exit_code
-    container_hash = hash_pid_map.get(pid)
-
-    if not container_hash:
-        return
-
-    # 확장된 디버깅 정보
-    status = "Success" if exit_code == 0 else f"Failure"
-    msg = f"[{formatted_time}] EXIT Container={container_hash} PID={pid} Process={comm} Status={status} (Exit Code: {exit_code})\n"
-
-    print(msg, end="")
+    def run(self):
+        """메인 실행 루프"""
+        self.bpf["events"].open_perf_buffer(self.handle_event)
+        print("컨테이너 프로세스 추적을 시작합니다. 종료하려면 Ctrl+C를 누르세요.")
+        try:
+            while True:
+                self.bpf.perf_buffer_poll(timeout=100)
+        except KeyboardInterrupt:
+            print("\n추적이 중지되었습니다.")
 
 
-# 메인 실행 루프
 if __name__ == "__main__":
-    bpf["events"].open_perf_buffer(handle_event)
-    print("컨테이너 프로세스 추적을 시작합니다. 종료하려면 Ctrl+C를 누르세요.")
-    try:
-        while True:
-            bpf.perf_buffer_poll(timeout=100)
-    except KeyboardInterrupt:
-        print("\n추적이 중지되었습니다.")
+    tracer = ProcessTracer()
+    tracer.run()
