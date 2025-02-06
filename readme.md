@@ -3,15 +3,13 @@
 ## 요구사항
 다른 컨테이너를 감시하는 bpf프로세스 또한 컨테이너로 배포되어야 함.
 
-## 기본 실행 명령어
+## 권장 실행 명령어 (최소 권한)
 ```bash
 docker run -it \
---privileged \
+--cap-drop=ALL \
+--cap-add=SYS_ADMIN \
+--cap-add=SYS_PTRACE \
 --pid=host \
---net=host \
---uts=host \
---ipc=host \
--v /:/host:ro \
 -v /sys/kernel/debug:/sys/kernel/debug \
 -v /lib/modules:/lib/modules \
 -v /usr/src:/usr/src \
@@ -20,17 +18,18 @@ docker run -it \
 bpf:test
 ```
 
-## 권한 설정
+## 필수 Capabilities 설명
 
-### Privileged 모드
-- `--privileged`
-  - 컨테이너에 호스트와 동등한 수준의 권한 부여
-  - 호스트의 모든 디바이스(/dev/) 접근 권한 획득
-  - SELinux/AppArmor 등 보안 정책 우회 가능
-  - 호스트 커널의 모든 기능(capabilities) 사용 가능
-  - 새로운 디바이스 생성 및 수정 권한
-  - 시스템 수준의 작업(시스템 시간 변경, 커널 모듈 로드 등) 수행 가능
-  - 사용 이유: eBPF 프로그램은 커널 수준의 접근 권한이 필요하므로 필수
+### SYS_ADMIN
+- BPF 시스템 콜 사용 권한
+- 커널 추적 기능 활성화
+- cgroup v2 파일시스템 마운트 가능
+- 시스템 관리 작업 수행
+
+### SYS_PTRACE
+- 프로세스 추적 및 디버깅
+- 다른 프로세스의 메모리 접근
+- ptrace 시스템 콜 사용
 
 ## 네임스페이스 설정
 
@@ -42,33 +41,6 @@ bpf:test
   - 호스트의 프로세스 트리 전체 접근 가능
   - init 프로세스(PID 1)를 포함한 모든 시스템 프로세스 확인
   - 프로세스 상태, 리소스 사용량 등 모니터링 가능
-
-### Network 네임스페이스
-- `--net=host`
-  - 컨테이너가 호스트의 네트워크 스택을 직접 사용
-  - 호스트의 모든 네트워크 인터페이스 사용 가능
-  - 별도의 가상 네트워크 인터페이스 생성하지 않음
-  - 호스트의 라우팅 테이블, iptables 규칙 등 공유
-  - 네트워크 성능 오버헤드가 없음 (컨테이너 네트워크 브릿지를 거치지 않음)
-  - 호스트의 모든 포트에 직접 접근 가능
-
-### UTS 네임스페이스
-- `--uts=host`
-  - UNIX Time-sharing System 네임스페이스 공유
-  - 호스트의 호스트명과 NIS 도메인 이름을 컨테이너와 공유
-  - 시스템 식별자(hostname, domainname) 변경 가능
-  - 클러스터 환경에서 노드 식별에 중요
-  - 시스템 모니터링 도구에서 정확한 호스트 정보 확인 가능
-
-### IPC 네임스페이스
-- `--ipc=host`
-  - Inter-Process Communication 리소스 공유
-  - 호스트의 모든 IPC 객체에 접근 가능:
-    - 공유 메모리 세그먼트(SHM)
-    - 세마포어
-    - 메시지 큐
-  - 호스트와 컨테이너 간 메모리 공유 가능
-  - 시스템 전체의 프로세스 간 통신 모니터링 가능
 
 ## 볼륨 마운트
 
@@ -119,48 +91,20 @@ bpf:test
 
 ## 보안 고려사항
 1. 권한 최소화
-   - 필요한 권한만 부여
-   - 가능한 경우 Privileged 모드 대신 특정 Capabilities 사용
+   - Privileged 모드 없이 최소한의 Capabilities만 사용
+   - SYS_ADMIN, SYS_PTRACE 외 추가 권한 불필요
 
 2. 접근 제어
    - 볼륨 마운트시 읽기 전용 설정
    - 중요 시스템 파일 보호
+   - /sys/kernel/debug 마운트는 BPF 프로그램 실행에 필수적
 
 3. 모니터링
    - 컨테이너 활동 로깅
    - 비정상 행위 탐지
+   - eBPF 프로그램 자체가 보안 모니터링 도구로 활용 가능
 
 4. 네트워크 보안
    - 필요한 포트만 노출
    - 네트워크 정책 적용 
-
-## 대체 실행 방법 (최소 권한)
-```bash
-docker run -it \
---cap-drop=ALL \
---cap-add=SYS_ADMIN \
---cap-add=SYS_PTRACE \
---pid=host \
---net=host \
---uts=host \
---ipc=host \
--v /:/host:ro \
--v /sys/kernel/debug:/sys/kernel/debug \
--v /lib/modules:/lib/modules \
--v /usr/src:/usr/src \
--v /sys/fs/cgroup:/sys/fs/cgroup:ro \
--v /proc:/proc \
-bpf:test
-```
-
-### Capabilities
-- `--cap-add=SYS_ADMIN`
-  - BPF 시스템콜 사용 권한
-  - 커널 기능 접근에 필수
-  - 특수 파일시스템(debugfs 등) 마운트
-  - 커널 모듈 관리
-
-- `--cap-add=SYS_PTRACE`
-  - 프로세스 추적 권한
-  - 다른 프로세스의 메모리와 상태 접근
-  - 프로세스 모니터링에 필요
+   - --net=host 사용 시 방화벽 설정 필수
