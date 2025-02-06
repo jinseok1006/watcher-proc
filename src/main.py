@@ -9,7 +9,6 @@ import os
 import time
 import re
 from bcc import BPF
-from container_map import ContainerPIDMap
 
 # 시간 오프셋 계산
 start_monotonic_ns = time.monotonic_ns()
@@ -81,15 +80,22 @@ static __always_inline int is_whitelisted(const char *s) {
     return 0;
 }
 
+// 매크로 수정
+#define EXIT_CODE(x) ((x >> 8) & 0xff)  // 상위 바이트가 실제 exit code
+
 // 프로세스 종료 핸들러 수정
 int sched_proc_exit_handler(struct sched_process_exit_args *ctx) {
     struct data_t data = {};
     data.event_type = PROC_EVENT_EXIT;
 
+    // 프로세스 정보 수집
     data.pid = bpf_get_current_pid_tgid() >> 32;
     data.timestamp = bpf_ktime_get_ns();
     data.cgroup_id = bpf_get_current_cgroup_id();
-    data.exit_code = ctx->code;  // tracepoint 구조체에서 exit code 추출
+    
+    // task_struct에서 exit code 추출
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    data.exit_code = (task->exit_code >> 8) & 0xff;  // 상위 바이트 사용
     
     bpf_get_current_comm(&data.comm, sizeof(data.comm));
     
@@ -177,6 +183,7 @@ def handle_event(cpu, data, size):
     - 시간 변환 및 포맷팅
     - 로그 파일 기록
     """
+    # print(cpu, data, size)
     event = bpf["events"].event(data)
     pid = event.pid
     comm = event.comm.decode("utf-8", "replace")
@@ -199,16 +206,15 @@ def handle_event(cpu, data, size):
     
     # EXIT 이벤트 처리
     exit_code = event.exit_code
-    container_hash = hash_pid_map.get(pid)  # pop으로 안전하게 가져오기
+    container_hash = hash_pid_map.get(pid)
     
-    if not container_hash:  # None인 경우 early return
+    if not container_hash:
         return
 
-    # 성공/실패 메시지 생성
-    status = "Success" if exit_code == 0 else f"Failure (Exit Code: {exit_code})"
-    msg = f"[{formatted_time}] EXIT Container={container_hash} PID={pid} Process={comm} Status={status}\n"
+    # 확장된 디버깅 정보
+    status = "Success" if exit_code == 0 else f"Failure"
+    msg = f"[{formatted_time}] EXIT Container={container_hash} PID={pid} Process={comm} Status={status} (Exit Code: {exit_code})\n"
 
-    # 콘솔 출력
     print(msg, end="")
 
 
