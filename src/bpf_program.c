@@ -21,6 +21,7 @@ struct data_t {
 };
 
 // 모니터링 대상 프로세스 목록
+// 내부에서 code-server에 따른 노드를 잡으면 안됨
 static const char *whitelist[] = {
     "gcc",
     "java",
@@ -61,6 +62,51 @@ static __always_inline int is_whitelisted(const char *s) {
     return 0;
 }
 
+// 프로세스 경로가 workspace에 있는지 확인하는 헬퍼 함수
+static __always_inline int is_workspace_binary(struct task_struct *task) {
+    // task가 유효하고 메모리 매핑과 실행 파일 정보가 있는지 확인
+    if (!task->mm || !task->mm->exe_file)
+        return 0;
+        
+    char buf[256] = {};  // 경로 저장용 버퍼
+    
+    // 실행 파일의 전체 경로 정보 가져오기
+    struct dentry *dentry = task->mm->exe_file->f_path.dentry;
+    struct dentry *parent = dentry;
+    int depth = 0;
+    
+    // 상위 디렉토리 순회하면서 경로 확인
+    while (parent && depth < 3) {  // 최대 3단계까지만 확인
+        char name[64] = {};
+        bpf_probe_read_str(&name, sizeof(name), parent->d_name.name);
+        
+        // workspace 디렉토리 체크
+        if (depth == 0) {  // 파일명
+            bpf_probe_read_str(&buf, sizeof(buf), name);
+        } else if (depth == 1) {  // workspace
+            if (strncmp(name, "workspace", 9) != 0)
+                return 0;
+        } else if (depth == 2) {  // config
+            if (strncmp(name, "config", 6) != 0)
+                return 0;
+        }
+        
+        parent = parent->d_parent;
+        depth++;
+    }
+    
+    return (depth == 3);  // /config/workspace/[파일명] 형태인 경우에만 true
+}
+
+// 프로세스가 추적 대상인지 확인하는 헬퍼 함수
+static __always_inline int should_trace(struct task_struct *task) {
+    char comm[TASK_COMM_LEN];
+    bpf_get_current_comm(&comm, sizeof(comm));
+    
+    // 화이트리스트에 있거나 workspace 바이너리인 경우 추적
+    return is_whitelisted(comm) || is_workspace_binary(task);
+}
+
 // exit_code 추출을 위한 매크로
 // 리눅스 커널에서 exit code는 상위 8비트에 저장됨
 #define EXIT_CODE(x) ((x >> 8) & 0xff)
@@ -69,28 +115,22 @@ static __always_inline int is_whitelisted(const char *s) {
 // @param ctx: BPF 컨텍스트 (레지스터 상태 포함)
 int sched_proc_exit_handler(struct pt_regs *ctx)
 {
-    // 이벤트 데이터 구조체 초기화
     struct data_t data = {};
     data.event_type = PROC_EVENT_EXIT;
-
-    // 현재 프로세스 정보 수집
-    data.pid = bpf_get_current_pid_tgid() >> 32;  // 상위 32비트가 PID
-    data.timestamp = bpf_ktime_get_ns();          // 현재 시간 (나노초)
-    data.cgroup_id = bpf_get_current_cgroup_id(); // 컨테이너 ID
     
-    // 현재 task_struct에서 종료 코드 추출
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();
-    data.exit_code = (task->exit_code >> 8) & 0xff;
     
-    // 프로세스 이름 가져오기
-    bpf_get_current_comm(&data.comm, sizeof(data.comm));
-    
-    // 화이트리스트에 없는 프로세스는 무시
-    if (!is_whitelisted(data.comm)) {
+    // 추적 대상 확인
+    if (!should_trace(task)) {
         return 0;
     }
     
-    // 수집한 데이터를 사용자 공간으로 전송
+    data.pid = bpf_get_current_pid_tgid() >> 32;
+    data.timestamp = bpf_ktime_get_ns();
+    data.cgroup_id = bpf_get_current_cgroup_id();
+    data.exit_code = (task->exit_code >> 8) & 0xff;
+    bpf_get_current_comm(&data.comm, sizeof(data.comm));
+    
     events.perf_submit(ctx, &data, sizeof(data));
     return 0;
 }
@@ -99,24 +139,21 @@ int sched_proc_exit_handler(struct pt_regs *ctx)
 // @param ctx: BPF 컨텍스트 (레지스터 상태 포함)
 int sched_proc_exec_handler(struct pt_regs *ctx)
 {
-    // 이벤트 데이터 구조체 초기화
     struct data_t data = {};
     data.event_type = PROC_EVENT_EXEC;
-
-    // 현재 프로세스 정보 수집
-    data.pid = bpf_get_current_pid_tgid() >> 32;  // 상위 32비트가 PID
-    data.timestamp = bpf_ktime_get_ns();          // 현재 시간 (나노초)
-    data.cgroup_id = bpf_get_current_cgroup_id(); // 컨테이너 ID
-
-    // 프로세스 이름 가져오기
-    bpf_get_current_comm(&data.comm, sizeof(data.comm));
-
-    // 화이트리스트에 없는 프로세스는 무시
-    if (!is_whitelisted(data.comm)) {
+    
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    
+    // 추적 대상 확인
+    if (!should_trace(task)) {
         return 0;
     }
-
-    // 수집한 데이터를 사용자 공간으로 전송
+    
+    data.pid = bpf_get_current_pid_tgid() >> 32;
+    data.timestamp = bpf_ktime_get_ns();
+    data.cgroup_id = bpf_get_current_cgroup_id();
+    bpf_get_current_comm(&data.comm, sizeof(data.comm));
+    
     events.perf_submit(ctx, &data, sizeof(data));
     return 0;
 }
