@@ -7,7 +7,7 @@
 """
 from bcc import BPF
 from time_utils import TimeManager
-from container_utils import get_container_id, HashPIDMap
+from container_utils import get_container_id, HashPIDMap, get_process_path, get_process_cmdline
 
 # BPF 프로그램 로드
 with open('src/bpf_program.c', 'r') as f:
@@ -34,21 +34,22 @@ class ProcessTracer:
             container_hash = get_container_id(pid)
             if container_hash:
                 self.hash_pid_map.add(pid, container_hash)
-                msg = f"[{formatted_time}] EXEC Container={container_hash} PID={pid} Process={comm}\n"
+                exe_path = get_process_path(pid)
+                cmdline = get_process_cmdline(pid)
+                msg = f"[{formatted_time}] EXEC Container={container_hash} PID={pid} Process={comm} Path={exe_path} CMD={cmdline}\n"
                 print(msg, end="")
             return
 
         # EXIT 이벤트 처리
         try:
-            container_hash = self.hash_pid_map.get(pid)
+            proc_info = self.hash_pid_map.get(pid)
         except KeyError:
-            # 프로세스 감시 시작 전에 실행된 프로세스인 경우
             print(f"[{formatted_time}] EXIT PID={pid} Process={comm} (감시 대상 아님) (Exit Code: {event.exit_code})\n")
             return
 
         exit_code = event.exit_code
         status = "Success" if exit_code == 0 else f"Failure"
-        msg = f"[{formatted_time}] EXIT Container={container_hash} PID={pid} Process={comm} Status={status} (Exit Code: {exit_code})\n"
+        msg = f"[{formatted_time}] EXIT Container={proc_info.container_hash} PID={pid} Process={comm} Status={status} (Exit Code: {exit_code}) Path={proc_info.exe_path} CMD={proc_info.cmdline}\n"
         print(msg, end="")
 
     def run(self):
