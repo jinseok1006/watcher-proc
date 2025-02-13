@@ -15,7 +15,7 @@ docker run -it \
 -v /usr/src:/usr/src \
 -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
 -v /proc:/proc \
-bpf:test
+watcher.proc:test
 ```
 
 ## 필수 Capabilities 설명
