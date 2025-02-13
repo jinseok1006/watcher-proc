@@ -12,9 +12,23 @@ bpf_source = """
 struct exec_data_t {
     u32 pid;
     char cmd[MAX_CMD_LEN];
+    char binary[MAX_CMD_LEN];  // 바이너리 경로용 버퍼
 };
 
 BPF_PERF_OUTPUT(events);
+
+// 바이너리 경로 읽기 함수를 안전한 방식으로 수정
+static inline int read_binary_path(struct tracepoint__sched__sched_process_exec *args, char *path) {
+    const char *filename;
+    
+    // 안전한 방식으로 filename 포인터 읽기
+    bpf_probe_read_kernel(&filename, sizeof(filename), &args->filename);
+    if (!filename)
+        return -1;
+    
+    // 문자열 읽기
+    return bpf_probe_read_user_str(path, MAX_CMD_READ, filename);
+}
 
 // 커맨드 라인 읽기 함수
 static inline int read_cmdline(struct task_struct *task, char *cmd, size_t size) {
@@ -56,6 +70,11 @@ TRACEPOINT_PROBE(sched, sched_process_exec) {
     // GCC 프로세스만 필터링
     if (data.cmd[0] != 'g' || data.cmd[1] != 'c' || data.cmd[2] != 'c')
         return 0;
+    
+    // 바이너리 경로 읽기
+    if (read_binary_path(args, data.binary) < 0) {
+        data.binary[0] = '\\0';
+    }
         
     data.pid = bpf_get_current_pid_tgid() >> 32;
     events.perf_submit(args, &data, sizeof(data));
@@ -70,7 +89,8 @@ bpf = BPF(text=bpf_source)
 def print_event(cpu, data, size):
     event = bpf["events"].event(data)
     cmd = event.cmd.decode('utf-8', errors='ignore').rstrip('\x00')
-    print(f"{event.pid:<10} | {cmd}")
+    binary = event.binary.decode('utf-8', errors='ignore').rstrip('\x00')
+    print(f"{event.pid:<10} | BINARY: {binary:<30} | CMD: {cmd}")
 
 # 이벤트 처리 설정
 bpf["events"].open_perf_buffer(print_event)
