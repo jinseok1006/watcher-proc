@@ -74,7 +74,12 @@ TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
 """
 
 # BPF 초기화
-bpf = BPF(text=bpf_source)
+try:
+    bpf = BPF(text=bpf_source)
+    print("Successfully compiled BPF program. Tracing gcc processes... Ctrl+C to exit.")
+except Exception as e:
+    print(f"Failed to compile BPF program: {e}")
+    exit(1)
 
 # 이벤트 출력 함수
 def print_event(cpu, data, size):
@@ -91,4 +96,5 @@ while True:
     try:
         bpf.perf_buffer_poll()
     except KeyboardInterrupt:
+        print("\nDetaching...")
         exit()
