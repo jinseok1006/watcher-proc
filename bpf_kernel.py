@@ -6,9 +6,12 @@ bpf_source = """
 #include <linux/sched.h>
 #include <linux/mm_types.h>
 
+#define MAX_CMD_LEN 64
+#define MAX_CMD_READ (MAX_CMD_LEN - 1)
+
 struct exec_data_t {
     u32 pid;
-    char cmd[64];  // 64바이트로 제한
+    char cmd[MAX_CMD_LEN];
 };
 
 BPF_PERF_OUTPUT(events);
@@ -25,20 +28,19 @@ static inline int read_cmdline(struct task_struct *task, char *cmd, size_t size)
     bpf_probe_read_kernel(&arg_end, sizeof(arg_end), &mm->arg_end);
     
     // 고정된 크기로 읽기
-    #define MAX_CMD_LEN 63
-    long bytes = bpf_probe_read_user(cmd, MAX_CMD_LEN, (void *)arg_start);
+    long bytes = bpf_probe_read_user(cmd, MAX_CMD_READ, (void *)arg_start);
     if (bytes < 0)
         return -1;
     
     // 고정된 크기의 루프로 변경
     #pragma unroll
-    for (int i = 0; i < MAX_CMD_LEN; i++) {
+    for (int i = 0; i < MAX_CMD_READ; i++) {
         if (cmd[i] == '\\0')
             cmd[i] = ' ';
     }
     
-    cmd[MAX_CMD_LEN] = '\\0';
-    return MAX_CMD_LEN;
+    cmd[MAX_CMD_READ] = '\\0';
+    return MAX_CMD_READ;
 }
 
 TRACEPOINT_PROBE(sched, sched_process_exec) {
@@ -68,7 +70,7 @@ bpf = BPF(text=bpf_source)
 def print_event(cpu, data, size):
     event = bpf["events"].event(data)
     cmd = event.cmd.decode('utf-8', errors='ignore').rstrip('\x00')
-    print(f"{event.pid} {cmd}")
+    print(f"{event.pid:<10} | {cmd}")
 
 # 이벤트 처리 설정
 bpf["events"].open_perf_buffer(print_event)
