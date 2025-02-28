@@ -53,8 +53,8 @@ TRACEPOINT_PROBE(syscalls, sys_enter_execve) {
         return 0;
     
     // GCC 프로세스만 필터링
-    if (data.cmd[0] != 'g' || data.cmd[1] != 'c' || data.cmd[2] != 'c')
-        return 0;
+    // if (data.cmd[0] != 'g' || data.cmd[1] != 'c' || data.cmd[2] != 'c')
+    //     return 0;
     
     // 바이너리 경로 읽기
     {
