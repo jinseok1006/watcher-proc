@@ -6,16 +6,16 @@
 ## 권장 실행 명령어 (최소 권한)
 ```bash
 docker run -it \
---cap-drop=ALL \
---cap-add=SYS_ADMIN \
---cap-add=SYS_PTRACE \
---pid=host \
--v /sys/kernel/debug:/sys/kernel/debug \
--v /lib/modules:/lib/modules \
--v /usr/src:/usr/src \
--v /sys/fs/cgroup:/sys/fs/cgroup:ro \
--v /proc:/proc \
-bpf:test
+  --cap-drop=ALL \
+  --cap-add=SYS_ADMIN \
+  --cap-add=SYS_PTRACE \
+  --pid=host \
+  -v /sys/kernel/debug:/sys/kernel/debug:ro \
+  -v /lib/modules:/lib/modules:ro \
+  -v /usr/src:/usr/src:ro \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
+  -v /proc:/proc \
+  watcher-proc:latest
 ```
 
 ## 필수 Capabilities 설명
@@ -112,3 +112,8 @@ bpf:test
 
 ## k8s
 daemonset으로 배포(모든 노드)
+
+
+```
+eval $(minikube docker-env -u)
+```
