@@ -117,3 +117,9 @@ daemonset으로 배포(모든 노드)
 ```
 eval $(minikube docker-env -u)
 ```
+
+
+컨테이너 해시 관련 (kn->name)
+cgroup의 leaf 디렉토리를 출력
+docker: docker-9a879f2ecd371ce4724
+kubernetes: cri-containerd-6cc798ea
