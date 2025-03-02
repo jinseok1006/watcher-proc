@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: watcher-proc:latest
+    container_name: watcher-proc
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+    pid: host
+    volumes:
+      - /sys/kernel/debug:/sys/kernel/debug:ro
+      - /lib/modules:/lib/modules:ro
+      - /usr/src:/usr/src:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /proc:/proc
+    security_opt:
+      - apparmor:unconfined
+    privileged: false
+    environment:
+      - PYTHONUNBUFFERED=1
