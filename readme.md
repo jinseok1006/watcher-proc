@@ -123,3 +123,6 @@ eval $(minikube docker-env -u)
 cgroup의 leaf 디렉토리를 출력
 docker: docker-9a879f2ecd371ce4724
 kubernetes: cri-containerd-6cc798ea
+
+
+sudo cat /sys/kernel/debug/tracing/trace_pipe
