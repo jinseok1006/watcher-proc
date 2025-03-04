@@ -6,7 +6,6 @@ services:
       context: .
       dockerfile: Dockerfile
     image: watcher-proc:latest
-    container_name: watcher-proc
     cap_drop:
       - ALL
     cap_add:
@@ -14,6 +13,7 @@ services:
       - SYS_PTRACE
     pid: host
     volumes:
+      - ./src:/app/src
       - /sys/kernel/debug:/sys/kernel/debug:ro
       - /lib/modules:/lib/modules:ro
       - /usr/src:/usr/src:ro

@@ -17,6 +17,7 @@ struct data_t {
     u32 pid;
     char comm[MAX_COMM_LEN];
     char container_id[CONTAINER_ID_LEN];
+    int exit_code;
 };
 
 BPF_PERF_OUTPUT(events);
@@ -50,11 +51,17 @@ static inline bool check_prefix_and_extract(const char *name, const char *prefix
     return true;
 }
 
-int trace_exec(struct tracepoint__sched__sched_process_exec *ctx) {
+int trace_exit(struct tracepoint__sched__sched_process_exit *ctx) {
     struct data_t data = {};
     
     // cgroup 정보 가져오기
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    if (!task)
+        return 0;
+
+    // task_struct에서 exit code 추출
+    data.exit_code = (task->exit_code >> 8) & 0xff;
+
     struct cgroup *cgrp = task->cgroups->dfl_cgrp;
     if (!cgrp) 
         return 0;
@@ -92,21 +99,22 @@ int trace_exec(struct tracepoint__sched__sched_process_exec *ctx) {
 def main():
     # BPF 프로그램 로드
     b = BPF(text=bpf_text)
-    b.attach_tracepoint(tp="sched:sched_process_exec", fn_name="trace_exec")
+    b.attach_tracepoint(tp="sched:sched_process_exit", fn_name="trace_exit")
     
     def print_event(cpu, data, size):
         event = b["events"].event(data)
         output = {
             "pid": event.pid,
             "command": event.comm.decode('utf-8').rstrip('\x00'),
-            "container_id": event.container_id.decode('utf-8').rstrip('\x00')
+            "container_id": event.container_id.decode('utf-8').rstrip('\x00'),
+            "exit_code": event.exit_code
         }
         print(json.dumps(output))
     
     # 이벤트 루프 설정
     b["events"].open_perf_buffer(print_event)
     
-    print("프로세스 추적 중... Ctrl+C로 종료하세요.", file=sys.stderr)
+    print("프로세스 종료 추적 중... Ctrl+C로 종료하세요.", file=sys.stderr)
     while True:
         try:
             b.perf_buffer_poll()
