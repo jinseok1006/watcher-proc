@@ -19,34 +19,39 @@ struct data_t {
     char comm[TASK_COMM_LEN];
     char fullpath[MAX_PATH_LEN];
     int path_offset;
-};
+} __attribute__((packed));
 
 BPF_PERF_OUTPUT(events);
 
 static __always_inline int get_dentry_path(struct dentry *dentry, char *buf, int buf_size)
 {
-    // 버퍼 전체를 0으로 초기화
-    __builtin_memset(buf, 0, buf_size);
+    // Initialize buffer with zeros using a loop
+    for (int i = 0; i < buf_size; i++) {
+        buf[i] = 0;
+    }
     
     int pos = buf_size - 1;
     buf[pos] = '\0';
 
-    #pragma unroll
-    for (int i = 0; i < MAX_DENTRY_LEVEL; i++) {
-        if (!dentry)
-            break;
-
-        struct dentry *parent = NULL;
-        bpf_probe_read(&parent, sizeof(parent), &dentry->d_parent);
-
-        if (dentry == parent)
+    struct dentry *d = dentry;
+    struct dentry *parent;
+    
+    // Simplified loop structure for better BPF compatibility
+    for (int i = 0; i < MAX_DENTRY_LEVEL && d != NULL; i++) {
+        bpf_probe_read(&parent, sizeof(parent), &d->d_parent);
+        
+        if (d == parent)
             break;
 
         struct qstr d_name;
-        bpf_probe_read(&d_name, sizeof(d_name), &dentry->d_name);
+        bpf_probe_read(&d_name, sizeof(d_name), &d->d_name);
 
         char dname[32];
-        __builtin_memset(dname, 0, sizeof(dname));
+        // Initialize dname array
+        for (int j = 0; j < 32; j++) {
+            dname[j] = 0;
+        }
+        
         int name_len = bpf_probe_read_str(dname, sizeof(dname), d_name.name);
 
         if (name_len <= 1)
@@ -63,16 +68,14 @@ static __always_inline int get_dentry_path(struct dentry *dentry, char *buf, int
             buf[pos] = '/';
         }
 
-        dentry = parent;
+        d = parent;
     }
 
-    // 경로가 비어있으면 루트(/) 설정
     if (pos == buf_size - 1) {
         pos--;
         buf[pos] = '/';
     }
     
-    bpf_trace_printk("cwd path in get_dentry_path: %s\n", &buf[pos]);
     return pos;
 }
 
@@ -80,8 +83,11 @@ int trace_execve(struct pt_regs *ctx)
 {
     struct data_t data = {};
     
-    // data 구조체 전체 초기화
-    __builtin_memset(&data, 0, sizeof(data));
+    // Initialize data structure using a loop
+    char *p = (char *)&data;
+    for (int i = 0; i < sizeof(data); i++) {
+        p[i] = 0;
+    }
     
     u32 pid = bpf_get_current_pid_tgid() >> 32;
     data.pid = pid;
@@ -105,7 +111,6 @@ int trace_execve(struct pt_regs *ctx)
 
     data.path_offset = get_dentry_path(dentry, data.fullpath, sizeof(data.fullpath));
     
-    // 경로가 제대로 구성되었는지 확인
     if (data.path_offset >= 0 && data.path_offset < sizeof(data.fullpath)) {
         bpf_trace_printk("cwd path in trace_execve: %s\n", &data.fullpath[data.path_offset]);
         events.perf_submit(ctx, &data, sizeof(data));
@@ -116,6 +121,7 @@ int trace_execve(struct pt_regs *ctx)
 """
 
 class Data(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [
         ("pid", ctypes.c_uint),
         ("comm", ctypes.c_char * 16),
@@ -123,39 +129,47 @@ class Data(ctypes.Structure):
         ("path_offset", ctypes.c_int)
     ]
 
-# def print_event(cpu, data, size):
-#     event = ctypes.cast(data, ctypes.POINTER(Data)).contents
-#     # path_offset 유효성 검사
-#     if 0 <= event.path_offset < 256:
-#         fullpath = event.fullpath[event.path_offset:].decode("utf-8", errors="replace")
-#         print("PID: %d, COMM: %s, CWD: %s" % (
-#             event.pid, 
-#             event.comm.decode("utf-8", errors="replace"), 
-#             fullpath
-#         ))
-#     else:
-#         print("PID: %d, COMM: %s, CWD: <invalid path>" % (
-#             event.pid, 
-#             event.comm.decode("utf-8", errors="replace")
-#         ))
-
 def print_event(cpu, data, size):
-    event = ctypes.cast(data, ctypes.POINTER(Data)).contents
-    
-    print(f"Event received - Size: {size}")
-    print(f"PID: {event.pid}")
-    print(f"COMM: {event.comm}")
-    print(f"Path offset: {event.path_offset}")
-    
-    # 전체 버퍼의 내용을 hex로 출력
-    print("Buffer content (hex):")
-    buffer_content = bytes(event.fullpath)
-    for i in range(0, len(buffer_content), 16):
-        chunk = buffer_content[i:i+16]
+    print(f"\nRaw event received - Size: {size}")
+    print("Raw buffer content (hex):")
+    # raw 데이터 출력
+    raw_bytes = ctypes.string_at(data, size)
+    for i in range(0, len(raw_bytes), 16):
+        chunk = raw_bytes[i:i+16]
         hex_values = ' '.join(f'{b:02x}' for b in chunk)
         ascii_values = ''.join(chr(b) if 32 <= b <= 126 else '.' for b in chunk)
         print(f"{i:04x}: {hex_values:<48} {ascii_values}")
     print("-" * 80)
+
+    # 구조체로 변환
+    event = ctypes.cast(data, ctypes.POINTER(Data)).contents
+    
+    print("Parsed event data:")
+    print(f"PID: {event.pid}")
+    print(f"COMM: {event.comm.decode('utf-8', errors='replace')}")
+    print(f"Path offset: {event.path_offset}")
+    
+    # fullpath 버퍼의 내용 확인 (raw_bytes에서 직접 추출)
+    print("\nParsed fullpath buffer content (hex):")
+    # fullpath는 pid(4) + comm(16) = 20 바이트 이후에 시작
+    fullpath_start = 20
+    fullpath_data = raw_bytes[fullpath_start:fullpath_start + 256]
+    for i in range(0, len(fullpath_data), 16):
+        chunk = fullpath_data[i:i+16]
+        hex_values = ' '.join(f'{b:02x}' for b in chunk)
+        ascii_values = ''.join(chr(b) if 32 <= b <= 126 else '.' for b in chunk)
+        print(f"{i:04x}: {hex_values:<48} {ascii_values}")
+    
+    if 0 <= event.path_offset < 256:
+        try:
+            # raw_bytes에서 직접 경로 추출
+            fullpath = fullpath_data[event.path_offset:].split(b'\0')[0].decode('utf-8', errors='replace')
+            print(f"\nCWD: {fullpath}")
+        except Exception as e:
+            print(f"\nError decoding path: {e}")
+    else:
+        print("\nCWD: <invalid path>")
+    print("=" * 80)
 
 if __name__ == "__main__":
     b = BPF(text=bpf_program)
