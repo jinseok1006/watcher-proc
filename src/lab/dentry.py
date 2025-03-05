@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 from bcc import BPF
 import ctypes
 
@@ -98,8 +98,7 @@ int trace_execve(struct pt_regs *ctx)
     if (!task)
         return 0;
 
-    struct fs_struct *fs = NULL;
-    bpf_probe_read(&fs, sizeof(fs), &task->fs);
+    struct fs_struct *fs = NULL; bpf_probe_read(&fs, sizeof(fs), &task->fs);
     if (!fs)
         return 0;
 

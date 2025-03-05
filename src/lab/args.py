@@ -62,10 +62,14 @@ class Data(ctypes.Structure):
 def print_event(cpu, data, size):
     event = ctypes.cast(data, ctypes.POINTER(Data)).contents
     
-    # args를 bytes로 변환하고 직접 출력
+    # 바이트 데이터를 가져와서 null로 분리
     args_bytes = bytes(event.args[:event.len])
+    args = [arg.decode('utf-8') for arg in args_bytes.split(b'\x00') if arg]
     
-    print(f"args (raw bytes): {args_bytes}")
+    print(f"\n[PID: {event.pid}]")
+    print("Arguments:")
+    for i, arg in enumerate(args):
+        print(f"  {i}: {arg}")
     print("-" * 40)
 
 # 이벤트 루프 설정
