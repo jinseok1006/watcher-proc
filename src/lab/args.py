@@ -11,12 +11,13 @@ bpf_text = """
 #include <linux/mm_types.h>
 #include <bcc/proto.h>
 
-#define ARGSIZE 256
+#define ARGSIZE 384
 
 struct data_t {
     u32 pid;
     char args[ARGSIZE];
     u32 len;
+    bool truncated;
 };
 
 BPF_PERF_OUTPUT(events);
@@ -31,11 +32,10 @@ int trace_exec(struct pt_regs *ctx) {
     
     mm = task->mm;
     if (mm && mm->arg_start) {
-        data.len = mm->arg_end - mm->arg_start;
-        if (data.len > ARGSIZE)
-            data.len = ARGSIZE;
+        u32 total_len = mm->arg_end - mm->arg_start;
+        data.truncated = (total_len > ARGSIZE);
+        data.len = total_len > ARGSIZE ? ARGSIZE : total_len;
             
-        // 한 번에 전체 인자 읽기
         bpf_probe_read_user(data.args, data.len, (void *)mm->arg_start);
     }
     
@@ -54,8 +54,9 @@ class Data(ctypes.Structure):
     _pack_ = 1
     _fields_ = [
         ("pid", ctypes.c_uint32),
-        ("args", ctypes.c_ubyte * 256),
-        ("len", ctypes.c_uint32)
+        ("args", ctypes.c_ubyte * 384),
+        ("len", ctypes.c_uint32),
+        ("truncated", ctypes.c_bool)
     ]
 
 # 콜백 함수 정의
@@ -70,6 +71,8 @@ def print_event(cpu, data, size):
     print("Arguments:")
     for i, arg in enumerate(args):
         print(f"  {i}: {arg}")
+    if event.truncated:
+        print("(Arguments were truncated)")
     print("-" * 40)
 
 # 이벤트 루프 설정

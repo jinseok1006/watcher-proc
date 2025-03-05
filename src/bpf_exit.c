@@ -3,8 +3,11 @@
 #include <linux/nsproxy.h>
 #include <linux/cgroup.h>
 
-#define CONTAINER_ID_LEN 64
+#define CONTAINER_ID_LEN 12
 #define MAX_COMM_LEN 16
+#define MAX_CGROUP_NAME_LEN 64
+#define DOCKER_PREFIX_LEN 7        // "docker-" 길이
+#define CONTAINERD_PREFIX_LEN 15   // "cri-containerd-" 길이
 
 struct data_t {
     u32 pid;
@@ -105,7 +108,7 @@ int trace_exit(struct tracepoint__sched__sched_process_exit *ctx) {
         return 0;
     
     // cgroup 이름 읽기
-    char cgroup_name[CONTAINER_ID_LEN];
+    char cgroup_name[MAX_CGROUP_NAME_LEN];
     bpf_probe_read_kernel_str(cgroup_name, sizeof(cgroup_name), (void *)kn->name);
     
     // container ID 초기화
@@ -114,13 +117,15 @@ int trace_exit(struct tracepoint__sched__sched_process_exit *ctx) {
     data.pid = bpf_get_current_pid_tgid() >> 32;
     
     // docker 형식 확인 (docker-)
-    if (check_prefix_and_extract(cgroup_name, "docker-", 7, data.container_id, 7)) {
+    if (check_prefix_and_extract(cgroup_name, "docker-", DOCKER_PREFIX_LEN, 
+        data.container_id, DOCKER_PREFIX_LEN)) {
         events.perf_submit(ctx, &data, sizeof(data));
         return 0;
     }
     
     // containerd 형식 확인 (cri-containerd-)
-    if (check_prefix_and_extract(cgroup_name, "cri-containerd-", 15, data.container_id, 15)) {
+    if (check_prefix_and_extract(cgroup_name, "cri-containerd-", CONTAINERD_PREFIX_LEN,
+        data.container_id, CONTAINERD_PREFIX_LEN)) {
         events.perf_submit(ctx, &data, sizeof(data));
     }
     
