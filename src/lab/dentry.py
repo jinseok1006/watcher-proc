@@ -66,6 +66,14 @@ static __always_inline int get_dentry_path(struct dentry *dentry, char *buf, int
         }
 
         d = parent;
+        
+        // MAX_DENTRY_LEVEL에 도달했지만 아직 루트가 아닌 경우 체크
+        if (i == MAX_DENTRY_LEVEL - 1) {
+            bpf_probe_read(&parent, sizeof(parent), &d->d_parent);
+            if (d != parent) {
+                *is_valid = 0;  // 아직 루트에 도달하지 못했으므로 유효하지 않음
+            }
+        }
     }
 
     if (pos == buf_size - 1) {
