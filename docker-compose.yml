@@ -17,8 +17,8 @@ services:
       - /sys/kernel/debug:/sys/kernel/debug:ro
       - /lib/modules:/lib/modules:ro
       - /usr/src:/usr/src:ro
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-      - /proc:/proc
+      # - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      # - /proc:/proc
     security_opt:
       - apparmor:unconfined
     privileged: false
