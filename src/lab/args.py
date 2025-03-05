@@ -17,7 +17,7 @@ struct data_t {
     u32 pid;
     char args[ARGSIZE];
     u32 len;
-    bool truncated;
+    u8 is_valid;
 };
 
 BPF_PERF_OUTPUT(events);
@@ -29,11 +29,12 @@ int trace_exec(struct pt_regs *ctx) {
     
     task = (struct task_struct *)bpf_get_current_task();
     data.pid = bpf_get_current_pid_tgid() >> 32;
+    data.is_valid = 1;  // 기본값으로 유효함으로 설정
     
     mm = task->mm;
     if (mm && mm->arg_start) {
         u32 total_len = mm->arg_end - mm->arg_start;
-        data.truncated = (total_len > ARGSIZE);
+        data.is_valid = (total_len <= ARGSIZE);  // ARGSIZE보다 크면 유효하지 않음
         data.len = total_len > ARGSIZE ? ARGSIZE : total_len;
             
         bpf_probe_read_user(data.args, data.len, (void *)mm->arg_start);
@@ -56,7 +57,7 @@ class Data(ctypes.Structure):
         ("pid", ctypes.c_uint32),
         ("args", ctypes.c_ubyte * 384),
         ("len", ctypes.c_uint32),
-        ("truncated", ctypes.c_bool)
+        ("is_valid", ctypes.c_ubyte)
     ]
 
 # 콜백 함수 정의
@@ -71,16 +72,13 @@ def print_event(cpu, data, size):
     print("Arguments:")
     for i, arg in enumerate(args):
         print(f"  {i}: {arg}")
-    if event.truncated:
-        print("(Arguments were truncated)")
+    print(f"유효한 명령줄: {'예' if event.is_valid else '아니오 (너무 긺)'}")
     print("-" * 40)
 
 # 이벤트 루프 설정
 b["events"].open_perf_buffer(print_event)
 
 print("Tracing all process executions... Ctrl+C to end")
-
-
 
 while True:
     try:
