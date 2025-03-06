@@ -2,6 +2,7 @@
 from bcc import BPF
 import ctypes
 import os
+from datetime import datetime
 
 # 상수 정의
 CONTAINER_ID_LEN = 12
@@ -23,21 +24,17 @@ class Data(ctypes.Structure):
 
 def print_event(cpu, data, size):
     event = ctypes.cast(data, ctypes.POINTER(Data)).contents
-    print(f"\n[PID: {event.pid}]")
-    print(f"Error flags: {bin(event.error_flags)}")
-    print(f"Container ID: {event.container_id.decode()}")
-    
-    # fullpath와 args는 ubyte 배열이므로 bytes로 변환 후 decode
+    # 바이트 데이터 처리
     fullpath_bytes = bytes(event.fullpath[event.path_offset:])
     args_bytes = bytes(event.args[:event.args_len])
-    
-    print(f"CWD: {fullpath_bytes.decode('utf-8', errors='replace')}")
-    # args를 \0으로 스플릿하여 출력
     args_list = args_bytes.split(b'\0')
     args_str = ' '.join(arg.decode('utf-8', errors='replace') for arg in args_list if arg)
-    print(f"Arguments: {args_str}")
-    print(f"Exit code: {event.exit_code}")
-    print("-" * 40)
+    
+    # gcc 명령어만 필터링 (정확히 'gcc'인 경우만)
+    if args_list and args_list[0] == b'gcc':
+        # 현재 시각을 포함하여 한 줄로 모든 정보 출력
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+        print(f"[TIME:{timestamp}] [PID:{event.pid}] [ERR:{bin(event.error_flags)}] [CID:{event.container_id.decode()}] [PATH:{fullpath_bytes.decode('utf-8', errors='replace')}] [ARGS:{args_str}] [EXIT:{event.exit_code}]")
 
 if __name__ == "__main__":
     # BPF 프로그램 로드
