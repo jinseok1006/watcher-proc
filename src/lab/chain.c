@@ -29,6 +29,7 @@ struct data_t {
     char args[ARGSIZE];
     int path_offset;
     u32 args_len;
+    int exit_code;           // exit code 추가
 };
 
 BPF_PERCPU_ARRAY(tmp_array, struct data_t, 1);
@@ -263,7 +264,32 @@ int args_handler(struct pt_regs *ctx) {
     data->args_len = (u32)length;
     bpf_probe_read_user(data->args, length, (void *)start);
     
+    // 여기서는 perf_submit 하지 않음
+    return 0;
+}
+
+// exit 트레이스포인트용 핸들러
+int exit_handler(struct pt_regs *ctx) {
+    u32 pid = bpf_get_current_pid_tgid() >> 32;
+    
+    // process_data에서 해당 PID의 데이터 조회
+    struct data_t *data = process_data.lookup(&pid);
+    if (!data)  // 컨테이너 프로세스가 아니었거나 exec 데이터 수집에 실패한 경우
+        return 0;
+    
+    // exit code 수집
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    if (!task) {
+        process_data.delete(&pid);
+        return 0;
+    }
+    
+    data->exit_code = task->exit_code >> 8; // 상위 8비트가 실제 exit code
+        
+    // 데이터를 사용자 공간으로 전송
     events.perf_submit(ctx, data, sizeof(struct data_t));
+    
+    // 맵에서 데이터 삭제
     process_data.delete(&pid);
     return 0;
 } 

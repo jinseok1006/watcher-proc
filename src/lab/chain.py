@@ -17,7 +17,8 @@ class Data(ctypes.Structure):
         ("fullpath", ctypes.c_ubyte * MAX_PATH_LEN),
         ("args", ctypes.c_ubyte * ARGSIZE),
         ("path_offset", ctypes.c_int),
-        ("args_len", ctypes.c_uint32)
+        ("args_len", ctypes.c_uint32),
+        ("exit_code", ctypes.c_int)
     ]
 
 def print_event(cpu, data, size):
@@ -35,6 +36,7 @@ def print_event(cpu, data, size):
     args_list = args_bytes.split(b'\0')
     args_str = ' '.join(arg.decode('utf-8', errors='replace') for arg in args_list if arg)
     print(f"Arguments: {args_str}")
+    print(f"Exit code: {event.exit_code}")
     print("-" * 40)
 
 if __name__ == "__main__":
@@ -61,8 +63,9 @@ if __name__ == "__main__":
     # 이벤트 콜백 설정
     b["events"].open_perf_buffer(print_event)
     
-    # 첫 번째 핸들러를 트레이스포인트에 연결
+    # exec과 exit 트레이스포인트 연결
     b.attach_tracepoint(tp="sched:sched_process_exec", fn_name="init_handler")
+    b.attach_tracepoint(tp="sched:sched_process_exit", fn_name="exit_handler")
     
     print("Tracing... Ctrl+C to end")
     try:
