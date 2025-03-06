@@ -42,7 +42,7 @@ def print_event(cpu, data, size):
 if __name__ == "__main__":
     # BPF 프로그램 로드
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    with open(os.path.join(current_dir, 'chain.c'), 'r') as f:
+    with open(os.path.join(current_dir, 'bpf.c'), 'r') as f:
         bpf_text = f.read()
     
     b = BPF(text=bpf_text)
