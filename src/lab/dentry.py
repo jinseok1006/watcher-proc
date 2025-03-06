@@ -13,7 +13,7 @@ bpf_program = r"""
 
 #define MAX_PATH_LEN 256
 #define MAX_DENTRY_LEVEL 16
-#define MAX_DNAME_LEN 32
+#define MAX_DNAME_LEN 64
 
 struct data_t {
     u32 pid;
