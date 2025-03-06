@@ -15,9 +15,15 @@
 #define MAX_DENTRY_LEVEL 16
 #define MAX_DNAME_LEN 64
 
+// 에러 플래그 정의
+#define ERR_NONE              0x00000000  // 모든 검사 통과
+#define ERR_DENTRY_TOO_DEEP   0x00000001  // dentry 깊이가 MAX_DENTRY_LEVEL 초과
+#define ERR_DNAME_TOO_LONG    0x00000002  // 개별 dname 길이가 MAX_DNAME_LEN 초과
+#define ERR_ARGS_TOO_LONG     0x00000004  // 명령줄 인수가 ARGSIZE 초과
+
 struct data_t {
     u32 pid;
-    u32 invalid_bits;
+    u32 error_flags;          // invalid_bits에서 이름 변경
     char container_id[CONTAINER_ID_LEN];
     char fullpath[MAX_PATH_LEN];
     char args[ARGSIZE];
@@ -125,7 +131,7 @@ int container_handler(struct pt_regs *ctx) {
     return 0;
 }
 
-static __always_inline int get_dentry_path(struct dentry *dentry, char *buf, int buf_size, u32 *invalid_bits)
+static __always_inline int get_dentry_path(struct dentry *dentry, char *buf, int buf_size, u32 *error_flags)
 {
     int pos = buf_size - 1;
     buf[pos] = '\0';
@@ -144,7 +150,7 @@ static __always_inline int get_dentry_path(struct dentry *dentry, char *buf, int
 
         // dname 길이 검사를 먼저 수행
         if (d_name.len > MAX_DNAME_LEN) {
-            *invalid_bits |= 0x2;  // dname 길이 초과
+            *error_flags |= ERR_DNAME_TOO_LONG;
             break;
         }
 
@@ -171,7 +177,7 @@ static __always_inline int get_dentry_path(struct dentry *dentry, char *buf, int
         if (i == MAX_DENTRY_LEVEL - 1) {
             bpf_probe_read(&parent, sizeof(parent), &d->d_parent);
             if (d != parent) {
-                *invalid_bits |= 0x1;  // 루트 도달 전에 MAX_DENTRY_LEVEL 초과
+                *error_flags |= ERR_DENTRY_TOO_DEEP;
             }
         }
     }
@@ -214,7 +220,7 @@ int cwd_handler(struct pt_regs *ctx) {
         return 0;
     }
 
-    data->path_offset = get_dentry_path(dentry, data->fullpath, sizeof(data->fullpath), &data->invalid_bits);
+    data->path_offset = get_dentry_path(dentry, data->fullpath, sizeof(data->fullpath), &data->error_flags);
     
     prog_array.call(ctx, 3);  // args_handler로
     return 0;
@@ -250,7 +256,7 @@ int args_handler(struct pt_regs *ctx) {
     }
 
     if (length > ARGSIZE) {
-        data->invalid_bits |= 0x4;  // 명령줄 인수 길이 초과
+        data->error_flags |= ERR_ARGS_TOO_LONG;
         length = ARGSIZE;
     }
 

@@ -12,7 +12,7 @@ ARGSIZE = 384
 class Data(ctypes.Structure):
     _fields_ = [
         ("pid", ctypes.c_uint32),
-        ("invalid_bits", ctypes.c_uint32),
+        ("error_flags", ctypes.c_uint32),
         ("container_id", ctypes.c_char * CONTAINER_ID_LEN),
         ("fullpath", ctypes.c_ubyte * MAX_PATH_LEN),
         ("args", ctypes.c_ubyte * ARGSIZE),
@@ -23,7 +23,7 @@ class Data(ctypes.Structure):
 def print_event(cpu, data, size):
     event = ctypes.cast(data, ctypes.POINTER(Data)).contents
     print(f"\n[PID: {event.pid}]")
-    print(f"Invalid bits: {bin(event.invalid_bits)}")
+    print(f"Error flags: {bin(event.error_flags)}")
     print(f"Container ID: {event.container_id.decode()}")
     
     # fullpath와 args는 ubyte 배열이므로 bytes로 변환 후 decode
@@ -31,7 +31,10 @@ def print_event(cpu, data, size):
     args_bytes = bytes(event.args[:event.args_len])
     
     print(f"CWD: {fullpath_bytes.decode('utf-8', errors='replace')}")
-    print(f"Arguments: {args_bytes.decode('utf-8', errors='replace')}")
+    # args를 \0으로 스플릿하여 출력
+    args_list = args_bytes.split(b'\0')
+    args_str = ' '.join(arg.decode('utf-8', errors='replace') for arg in args_list if arg)
+    print(f"Arguments: {args_str}")
     print("-" * 40)
 
 if __name__ == "__main__":
