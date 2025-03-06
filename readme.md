@@ -29,5 +29,3 @@ sudo cat /sys/kernel/debug/tracing/trace_pipe
 
 tailcall을 활용한 bpf 핸들러 분할/핸들러간 연결
 
-
-        bpf_probe_read_user(data.args, len, (void *)mm->arg_start);
