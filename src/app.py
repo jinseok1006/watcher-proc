@@ -6,12 +6,49 @@ import asyncio
 import threading
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Dict, Any, List
+from dataclasses import dataclass
+from enum import Enum, auto
 
 # 상수 정의
 CONTAINER_ID_LEN = 12
 MAX_PATH_LEN = 256
 ARGSIZE = 384
+
+class ProcessType(Enum):
+    UNKNOWN = auto()
+    COMPILER = auto()
+    INTERPRETER = auto()
+    USER_BINARY = auto()
+
+@dataclass
+class ProcessEventData:
+    """프로세스 이벤트 데이터 클래스"""
+    timestamp: str
+    pid: int
+    process_type: ProcessType
+    binary_path: str
+    container_id: str
+    cwd: str
+    args: str
+    error_flags: str
+    exit_code: int
+
+class ProcessFilter:
+    """프로세스 필터링 로직"""
+    def __init__(self):
+        # 초기 필터 패턴 설정
+        self.patterns = {
+            ProcessType.COMPILER: ['/usr/bin/x86_64-linux-gnu-gcc-13'],
+            ProcessType.INTERPRETER: ['/usr/bin/python3.12'],
+            ProcessType.USER_BINARY: ['/home/', '/tmp/']
+        }
+
+    def get_process_type(self, binary_path: str, container_id: str = "") -> ProcessType:
+        for proc_type, patterns in self.patterns.items():
+            if any(pattern in binary_path for pattern in patterns):
+                return proc_type
+        return ProcessType.UNKNOWN
 
 class ProcessEvent(ctypes.Structure):
     """프로세스 이벤트 데이터 구조체"""
@@ -27,6 +64,61 @@ class ProcessEvent(ctypes.Structure):
         ("args_len", ctypes.c_uint32),
         ("exit_code", ctypes.c_int)
     ]
+
+class AsyncEventProcessor:
+    """비동기 이벤트 처리"""
+    def __init__(self, event_queue: asyncio.Queue):
+        self.event_queue = event_queue
+        self.logger = logging.getLogger(__name__)
+        self._running = True
+        self.process_filter = ProcessFilter()
+
+    async def prepare_event(self, data: Any, size: int) -> ProcessEventData:
+        """이벤트 데이터 준비 및 필터링"""
+        event = ctypes.cast(data, ctypes.POINTER(ProcessEvent)).contents
+        
+        binary_path = bytes(event.binary_path[event.binary_path_offset:]).strip(b'\0').decode('utf-8')
+        container_id = event.container_id.decode()
+        
+        process_type = self.process_filter.get_process_type(
+            binary_path=binary_path,
+            container_id=container_id
+        )
+        
+        return ProcessEventData(
+            timestamp=datetime.now().isoformat(),
+            pid=event.pid,
+            process_type=process_type,
+            binary_path=binary_path,
+            container_id=container_id,
+            cwd=bytes(event.cwd[event.cwd_offset:]).strip(b'\0').decode('utf-8'),
+            args=' '.join(arg.decode('utf-8', errors='replace') 
+                         for arg in bytes(event.args[:event.args_len]).split(b'\0') if arg),
+            error_flags=bin(event.error_flags),
+            exit_code=event.exit_code
+        )
+
+    async def handle_process_event(self, event: ProcessEventData) -> None:
+        """필터링된 프로세스 처리"""
+        # TODO: 실제 처리 로직 구현 (DB 저장 등)
+        self.logger.info(f"Processing {event.process_type.name} process: {event}")
+
+    async def run(self) -> None:
+        """이벤트 처리 메인 루프"""
+        while self._running:
+            try:
+                data, size = await self.event_queue.get()
+                event = await self.prepare_event(data, size)
+                
+                # 관심 있는 프로세스만 처리
+                if event.process_type != ProcessType.UNKNOWN:
+                    await self.handle_process_event(event)
+                
+                self.event_queue.task_done()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.logger.error(f"Error processing event: {e}")
 
 class BPFCollector:
     """BPF 이벤트 수집 담당 (동기 작업)"""
@@ -104,51 +196,6 @@ class BPFCollector:
                 break
             except Exception as e:
                 self.logger.error(f"Error in BPF polling: {e}")
-
-class AsyncEventProcessor:
-    """이벤트 처리 담당 (비동기 작업)"""
-    def __init__(self, event_queue: asyncio.Queue):
-        self.event_queue = event_queue
-        self.logger = logging.getLogger(__name__)
-        self._running = True
-
-    def stop(self) -> None:
-        """처리 중지"""
-        self._running = False
-
-    async def process_event(self, data: Any, size: int) -> Dict[str, Any]:
-        """이벤트 데이터 처리"""
-        event = ctypes.cast(data, ctypes.POINTER(ProcessEvent)).contents
-        
-        binary_path_bytes = bytes(event.binary_path[event.binary_path_offset:]).strip(b'\0')
-        cwd_bytes = bytes(event.cwd[event.cwd_offset:]).strip(b'\0')
-        args_bytes = bytes(event.args[:event.args_len])
-        args_list = args_bytes.split(b'\0')
-        args_str = ' '.join(arg.decode('utf-8', errors='replace') for arg in args_list if arg)
-        
-        return {
-            'timestamp': datetime.now().isoformat(),
-            'pid': event.pid,
-            'error_flags': bin(event.error_flags),
-            'container_id': event.container_id.decode(),
-            'binary_path': binary_path_bytes.decode('utf-8', errors='replace'),
-            'cwd': cwd_bytes.decode('utf-8', errors='replace'),
-            'args': args_str,
-            'exit_code': event.exit_code
-        }
-
-    async def run(self) -> None:
-        """이벤트 처리 메인 루프"""
-        while self._running:
-            try:
-                data, size = await self.event_queue.get()
-                event_data = await self.process_event(data, size)
-                self.logger.info(f"Process Event: {event_data}")
-                self.event_queue.task_done()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                self.logger.error(f"Error processing event: {e}")
 
 # 로깅 설정
 logging.basicConfig(
