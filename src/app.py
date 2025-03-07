@@ -19,8 +19,10 @@ class ProcessEvent(ctypes.Structure):
         ("pid", ctypes.c_uint32),
         ("error_flags", ctypes.c_uint32),
         ("container_id", ctypes.c_char * CONTAINER_ID_LEN),
+        ("binary_path", ctypes.c_ubyte * MAX_PATH_LEN),
         ("fullpath", ctypes.c_ubyte * MAX_PATH_LEN),
         ("args", ctypes.c_ubyte * ARGSIZE),
+        ("binary_path_offset", ctypes.c_int),
         ("path_offset", ctypes.c_int),
         ("args_len", ctypes.c_uint32),
         ("exit_code", ctypes.c_int)
@@ -54,20 +56,19 @@ class BPFCollector:
             
             self.bpf = BPF(text=bpf_text)
             
-            # 핸들러 함수 로드 및 등록
+            # 핸들러 순서 수정
             handlers = [
                 self.bpf.load_func("init_handler", BPF.TRACEPOINT),
                 self.bpf.load_func("container_handler", BPF.TRACEPOINT),
+                self.bpf.load_func("binary_handler", BPF.TRACEPOINT),
                 self.bpf.load_func("cwd_handler", BPF.TRACEPOINT),
                 self.bpf.load_func("args_handler", BPF.TRACEPOINT)
             ]
             
-            # prog_array에 핸들러 등록
             prog_array = self.bpf.get_table("prog_array")
             for idx, handler in enumerate(handlers):
                 prog_array[idx] = handler
             
-            # 이벤트 콜백 및 트레이스포인트 설정
             self.bpf["events"].open_perf_buffer(self.event_callback)
             self.bpf.attach_tracepoint(tp="sched:sched_process_exec", fn_name="init_handler")
             self.bpf.attach_tracepoint(tp="sched:sched_process_exit", fn_name="exit_handler")
@@ -119,6 +120,7 @@ class AsyncEventProcessor:
         """이벤트 데이터 처리"""
         event = ctypes.cast(data, ctypes.POINTER(ProcessEvent)).contents
         
+        binary_path_bytes = bytes(event.binary_path[event.binary_path_offset:])
         fullpath_bytes = bytes(event.fullpath[event.path_offset:])
         args_bytes = bytes(event.args[:event.args_len])
         args_list = args_bytes.split(b'\0')
@@ -129,6 +131,7 @@ class AsyncEventProcessor:
             'pid': event.pid,
             'error_flags': bin(event.error_flags),
             'container_id': event.container_id.decode(),
+            'binary_path': binary_path_bytes.decode('utf-8', errors='replace'),
             'cwd': fullpath_bytes.decode('utf-8', errors='replace'),
             'args': args_str,
             'exit_code': event.exit_code

@@ -23,18 +23,20 @@
 
 struct data_t {
     u32 pid;
-    u32 error_flags;          // invalid_bits에서 이름 변경
+    u32 error_flags;
     char container_id[CONTAINER_ID_LEN];
+    char binary_path[MAX_PATH_LEN];    // 추가: 바이너리 경로
     char fullpath[MAX_PATH_LEN];
     char args[ARGSIZE];
+    int binary_path_offset;            // 추가: 바이너리 경로 오프셋
     int path_offset;
     u32 args_len;
-    int exit_code;           // exit code 추가
+    int exit_code;
 };
 
 BPF_PERCPU_ARRAY(tmp_array, struct data_t, 1);
 BPF_HASH(process_data, u32, struct data_t);
-BPF_PROG_ARRAY(prog_array, 4);
+BPF_PROG_ARRAY(prog_array, 5);
 BPF_PERF_OUTPUT(events);
 
 static __always_inline bool check_prefix_and_extract(const char *name, const char *prefix, int prefix_len, char *container_id, int offset) {
@@ -223,7 +225,7 @@ int cwd_handler(struct pt_regs *ctx) {
 
     data->path_offset = get_dentry_path(dentry, data->fullpath, sizeof(data->fullpath), &data->error_flags);
     
-    prog_array.call(ctx, 3);  // args_handler로
+    prog_array.call(ctx, 4);  // args_handler로
     return 0;
 }
 
@@ -291,5 +293,48 @@ int exit_handler(struct pt_regs *ctx) {
     
     // 맵에서 데이터 삭제
     process_data.delete(&pid);
+    return 0;
+}
+
+// binary_handler 추가
+int binary_handler(struct pt_regs *ctx) {
+    u32 pid = bpf_get_current_pid_tgid() >> 32;
+    struct data_t *data = process_data.lookup(&pid);
+    if (!data) {
+        process_data.delete(&pid);
+        return 0;
+    }
+    
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    if (!task) {
+        process_data.delete(&pid);
+        return 0;
+    }
+
+    struct mm_struct *mm;
+    bpf_probe_read(&mm, sizeof(mm), &task->mm);
+    if (!mm) {
+        process_data.delete(&pid);
+        return 0;
+    }
+
+    struct file *exe_file;
+    bpf_probe_read(&exe_file, sizeof(exe_file), &mm->exe_file);
+    if (!exe_file) {
+        process_data.delete(&pid);
+        return 0;
+    }
+
+    struct path fpath;
+    bpf_probe_read(&fpath, sizeof(fpath), &exe_file->f_path);
+
+    data->binary_path_offset = get_dentry_path(
+        fpath.dentry,
+        data->binary_path,
+        sizeof(data->binary_path),
+        &data->error_flags
+    );
+
+    prog_array.call(ctx, 3);  // cwd_handler로
     return 0;
 } 
