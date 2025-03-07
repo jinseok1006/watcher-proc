@@ -1,5 +1,6 @@
 from typing import List
 import os
+from pathlib import Path
 
 class Settings:
     # 기본 네임스페이스 설정
@@ -38,3 +39,21 @@ class Settings:
         'g++': 'assignment2',
         # ... 다른 매핑 정보
     } 
+
+# 프로젝트 설정
+PROJECT_ROOT = '/home/coder/project'
+
+# BPF 관련 상수
+CONTAINER_ID_LEN = 12
+MAX_PATH_LEN = 256
+ARGSIZE = 384
+
+# 프로세스 패턴
+PROCESS_PATTERNS = {
+    'GCC': ['/usr/bin/x86_64-linux-gnu-gcc-13'],
+    'CLANG': ['/usr/lib/llvm-18/bin/clang'],
+    'PYTHON': ['/usr/bin/python3.12']
+}
+
+# 컴파일러 설정
+COMPILER_SKIP_OPTIONS = {'-o', '-I', '-include', '-D', '-U', '-MF'} 
