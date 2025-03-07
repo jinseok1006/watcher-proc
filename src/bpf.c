@@ -26,10 +26,10 @@ struct data_t {
     u32 error_flags;
     char container_id[CONTAINER_ID_LEN];
     char binary_path[MAX_PATH_LEN];    // 추가: 바이너리 경로
-    char fullpath[MAX_PATH_LEN];
+    char cwd[MAX_PATH_LEN];
     char args[ARGSIZE];
     int binary_path_offset;            // 추가: 바이너리 경로 오프셋
-    int path_offset;
+    int cwd_offset;
     u32 args_len;
     int exit_code;
 };
@@ -223,7 +223,7 @@ int cwd_handler(struct pt_regs *ctx) {
         return 0;
     }
 
-    data->path_offset = get_dentry_path(dentry, data->fullpath, sizeof(data->fullpath), &data->error_flags);
+    data->cwd_offset = get_dentry_path(dentry, data->cwd, sizeof(data->cwd), &data->error_flags);
     
     prog_array.call(ctx, 4);  // args_handler로
     return 0;

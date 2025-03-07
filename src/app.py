@@ -20,10 +20,10 @@ class ProcessEvent(ctypes.Structure):
         ("error_flags", ctypes.c_uint32),
         ("container_id", ctypes.c_char * CONTAINER_ID_LEN),
         ("binary_path", ctypes.c_ubyte * MAX_PATH_LEN),
-        ("fullpath", ctypes.c_ubyte * MAX_PATH_LEN),
+        ("cwd", ctypes.c_ubyte * MAX_PATH_LEN),
         ("args", ctypes.c_ubyte * ARGSIZE),
         ("binary_path_offset", ctypes.c_int),
-        ("path_offset", ctypes.c_int),
+        ("cwd_offset", ctypes.c_int),
         ("args_len", ctypes.c_uint32),
         ("exit_code", ctypes.c_int)
     ]
@@ -121,7 +121,7 @@ class AsyncEventProcessor:
         event = ctypes.cast(data, ctypes.POINTER(ProcessEvent)).contents
         
         binary_path_bytes = bytes(event.binary_path[event.binary_path_offset:]).strip(b'\0')
-        fullpath_bytes = bytes(event.fullpath[event.path_offset:]).strip(b'\0')
+        cwd_bytes = bytes(event.cwd[event.cwd_offset:]).strip(b'\0')
         args_bytes = bytes(event.args[:event.args_len])
         args_list = args_bytes.split(b'\0')
         args_str = ' '.join(arg.decode('utf-8', errors='replace') for arg in args_list if arg)
@@ -132,7 +132,7 @@ class AsyncEventProcessor:
             'error_flags': bin(event.error_flags),
             'container_id': event.container_id.decode(),
             'binary_path': binary_path_bytes.decode('utf-8', errors='replace'),
-            'cwd': fullpath_bytes.decode('utf-8', errors='replace'),
+            'cwd': cwd_bytes.decode('utf-8', errors='replace'),
             'args': args_str,
             'exit_code': event.exit_code
         }
