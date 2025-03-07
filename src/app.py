@@ -121,6 +121,12 @@ class AsyncEventProcessor:
         event = ctypes.cast(data, ctypes.POINTER(ProcessEvent)).contents
         
         binary_path_bytes = bytes(event.binary_path[event.binary_path_offset:]).strip(b'\0')
+        binary_path = binary_path_bytes.decode('utf-8', errors='replace')
+        
+        # gcc-13 실행만 필터링
+        if binary_path != '/usr/bin/x86_64-linux-gnu-gcc-13':
+            return None
+            
         fullpath_bytes = bytes(event.fullpath[event.path_offset:]).strip(b'\0')
         args_bytes = bytes(event.args[:event.args_len])
         args_list = args_bytes.split(b'\0')
@@ -131,7 +137,7 @@ class AsyncEventProcessor:
             'pid': event.pid,
             'error_flags': bin(event.error_flags),
             'container_id': event.container_id.decode(),
-            'binary_path': binary_path_bytes.decode('utf-8', errors='replace'),
+            'binary_path': binary_path,
             'cwd': fullpath_bytes.decode('utf-8', errors='replace'),
             'args': args_str,
             'exit_code': event.exit_code
@@ -143,7 +149,8 @@ class AsyncEventProcessor:
             try:
                 data, size = await self.event_queue.get()
                 event_data = await self.process_event(data, size)
-                self.logger.info(f"Process Event: {event_data}")
+                if event_data:  # None이 아닐 때만 로깅
+                    self.logger.info(f"Process Event: {event_data}")
                 self.event_queue.task_done()
             except asyncio.CancelledError:
                 break
