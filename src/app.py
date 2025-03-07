@@ -120,8 +120,8 @@ class AsyncEventProcessor:
         """이벤트 데이터 처리"""
         event = ctypes.cast(data, ctypes.POINTER(ProcessEvent)).contents
         
-        binary_path_bytes = bytes(event.binary_path[event.binary_path_offset:])
-        fullpath_bytes = bytes(event.fullpath[event.path_offset:])
+        binary_path_bytes = bytes(event.binary_path[event.binary_path_offset:]).strip(b'\0')
+        fullpath_bytes = bytes(event.fullpath[event.path_offset:]).strip(b'\0')
         args_bytes = bytes(event.args[:event.args_len])
         args_list = args_bytes.split(b'\0')
         args_str = ' '.join(arg.decode('utf-8', errors='replace') for arg in args_list if arg)
