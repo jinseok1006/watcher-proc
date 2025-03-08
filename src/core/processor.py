@@ -51,7 +51,6 @@ class AsyncEventProcessor:
         return event_data
 
     async def handle_process_event(self, event: ProcessEventData) -> None:
-        self.logger.info("[이벤트 처리 시작]")
         self.logger.info(
             f"프로세스 정보: "
             f"PID={event.pid}, "
@@ -59,6 +58,40 @@ class AsyncEventProcessor:
             f"경로={event.binary_path}"
         )
 
+        # 1. 사용자 바이너리 실행 처리
+        if event.process_type == ProcessType.USER_BINARY:
+            try:
+                hw_dir = self.hw_checker.get_homework_info(event.binary_path)
+                if hw_dir:
+                    self.logger.info(
+                        f"[실행 감지] "
+                        f"과제: {hw_dir}, "
+                        f"실행 파일: {event.binary_path}, "
+                        f"작업 디렉토리: {event.cwd}, "
+                        f"명령줄: {event.args}, "
+                        f"종료 코드: {event.exit_code}"
+                    )
+                    # TODO: API 호출 준비
+                    # {
+                    #     "homework_dir": hw_dir,
+                    #     "binary_path": event.binary_path,
+                    #     "working_dir": event.cwd,
+                    #     "command_line": event.args,
+                    #     "exit_code": event.exit_code,
+                    #     "timestamp": event.timestamp
+                    # }
+                else:
+                    self.logger.debug(
+                        f"[무시] 과제 디렉토리 외 실행 파일: {event.binary_path}"
+                    )
+            except Exception as e:
+                self.logger.error(
+                    f"[오류] 과제 실행 파일 처리 중 오류 발생: {str(e)}, "
+                    f"경로: {event.binary_path}"
+                )
+            return
+
+        # 2. 컴파일러 실행 처리
         parser = self.parsers.get(event.process_type)
         if not parser:
             self.logger.info(
@@ -79,7 +112,7 @@ class AsyncEventProcessor:
                 )
                 # TODO: API 호출 준비
             else:
-                self.logger.info(
+                self.logger.debug(
                     f"[과제 외 파일] "
                     f"파일: {source_file}"
                 )
