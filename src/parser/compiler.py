@@ -13,6 +13,24 @@ class CCompilerParser(Parser):
         self.logger.info(f"[초기화] {process_type.name} 파서 생성됨")
     
     def parse(self, args: str, cwd: str) -> CommandResult:
+        """컴파일러 명령어 파싱
+
+        Args:
+            args: 명령어 인자 문자열
+                예시: "main.c -o main"
+                예시: "-I/usr/include test.c -o test"
+            cwd: 현재 작업 디렉토리 (절대 경로)
+                예시: "/home/coder/project/hw1"
+
+        Returns:
+            CommandResult:
+                - source_files: 소스 파일 절대 경로 목록 (예: ["/home/coder/project/hw1/main.c"])
+                - cwd: 현재 작업 디렉토리 (입력값 그대로)
+                - process_type: 컴파일러 타입 (GCC 또는 CLANG)
+
+        Note:
+            다음 옵션과 그 뒤의 인자는 무시됨: {-o, -I, -include, -D, -U, -MF}
+        """
         self.logger.info(f"[파싱 시작] 명령어: {args}")
         args_list = args.split()
         source_files = []

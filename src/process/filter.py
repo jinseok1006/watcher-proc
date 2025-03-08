@@ -12,6 +12,28 @@ class ProcessFilter:
         self.logger.info(f"[초기화] 프로세스 패턴: {self.patterns}")
 
     def get_process_type(self, binary_path: str, container_id: str = "") -> ProcessType:
+        """실행된 프로세스의 타입을 결정
+
+        Args:
+            binary_path: 실행 파일의 절대 경로
+                예시: "/usr/lib/llvm-18/bin/clang" (컴파일러)
+                예시: "/home/coder/project/hw1/a.out" (과제 실행 파일)
+                예시: "/usr/bin/ls" (기타 프로세스)
+            container_id: 컨테이너 ID (선택적)
+                예시: "9a879f2ecd37"
+
+        Returns:
+            ProcessType:
+                - GCC: gcc 컴파일러 실행 시
+                - CLANG: clang 컴파일러 실행 시
+                - PYTHON: python 인터프리터 실행 시
+                - USER_BINARY: 과제 디렉토리 내 실행 파일 실행 시
+                - UNKNOWN: 그 외 모든 경우
+
+        Note:
+            1. 시스템 바이너리 체크 -> 과제 실행 파일 체크 -> UNKNOWN 순으로 검사
+            2. 과제 디렉토리는 '/home/coder/project/hw*' 형식이어야 함
+        """
         try:
             # 1. 시스템 바이너리 (컴파일러/인터프리터) 체크
             for proc_type, patterns in self.patterns.items():

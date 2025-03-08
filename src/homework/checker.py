@@ -12,6 +12,19 @@ class DefaultHomeworkChecker(HomeworkChecker):
         self.logger.info(f"[초기화] 프로젝트 루트 설정: {project_root}")
 
     def get_homework_info(self, file_path: str | Path) -> Optional[str]:
+        """과제 디렉토리 정보 확인
+
+        Args:
+            file_path: 검사할 파일의 절대 경로
+                예시: "/home/coder/project/hw1/main.c"
+                예시: "/home/coder/project/hw2/a.out"
+                예시: "/usr/bin/gcc"
+
+        Returns:
+            Optional[str]: 
+                - 성공 시: 과제 디렉토리 이름 (예: "hw1", "hw2")
+                - 실패 시: None (프로젝트 외부이거나 과제 디렉토리가 아닌 경우)
+        """
         self.logger.info(f"[경로 검사 시작] 파일: {file_path}")
         try:
             path = Path(file_path).resolve()
