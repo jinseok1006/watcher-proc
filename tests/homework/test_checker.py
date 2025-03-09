@@ -8,8 +8,8 @@ class TestDefaultHomeworkChecker:
     def mock_settings(self):
         """테스트용 설정 모의 객체"""
         with patch('src.homework.checker.settings') as mock_settings:
-            # 테스트용 기본 패턴 설정
-            mock_settings.homework_path_pattern = r'^/(?:os|network|system)-\d+-\d+/hw\d+(?:/|$)'
+            # 테스트용 기본 패턴 설정 - 실제 settings.py의 기본값과 동일하게
+            mock_settings.homework_path_pattern = r'^/[a-z]+-\d+-\d+/hw\d+(?:/.*)?$'
             yield mock_settings
 
     @pytest.fixture
@@ -20,9 +20,11 @@ class TestDefaultHomeworkChecker:
     def test_valid_homework_paths(self, checker):
         """유효한 과제 경로 테스트"""
         valid_paths = [
-            "/os-5-202012180/hw1/main.c",
-            "/network-1-201912345/hw2/test",
-            "/system-3-202154321/hw3"
+            "/os-5-202012180/hw1/main.c",          # 실행 파일
+            "/network-1-201912345/hw2/test",       # 실행 파일
+            "/system-3-202154321/hw3",             # 디렉토리
+            "/algorithm-2-202012345/hw1/src/main", # 중첩된 디렉토리
+            "/database-1-201912345/hw2/"           # 끝에 슬래시
         ]
         
         for path in valid_paths:
@@ -33,11 +35,13 @@ class TestDefaultHomeworkChecker:
     def test_invalid_paths(self, checker):
         """유효하지 않은 경로 테스트"""
         invalid_paths = [
-            "/math-5-202012180/hw1/main.c",      # 허용되지 않은 과목
-            "/os-a-202012180/hw1/main.c",        # 잘못된 분반 형식
-            "/network-1-201912345/homework2",     # 잘못된 과제 디렉토리 형식
-            "/system-3-202154321/hw3/hw4",       # 중첩된 과제 디렉토리
-            "relative/path/hw1/main.c"           # 상대 경로
+            "/OS-5-202012180/hw1/main.c",      # 대문자 과목명
+            "/os-a-202012180/hw1/main.c",      # 잘못된 분반 형식
+            "/network-1-201912345/homework2",   # 잘못된 과제 디렉토리 형식
+            "relative/path/hw1/main.c",         # 상대 경로
+            "/os5-1-202012180/hw1",            # 잘못된 과목명 형식
+            "/os/-1-202012180/hw1",            # 잘못된 분반 형식
+            "/os-1-/hw1"                       # 잘못된 학번 형식
         ]
         
         for path in invalid_paths:
@@ -49,17 +53,17 @@ class TestDefaultHomeworkChecker:
         test_cases = [
             # (패턴, 테스트 경로, 기대 결과)
             (
-                r'^/[a-z]+-\d+-\d+/hw\d+(?:/|$)',
+                r'^/[a-z]+-\d+-\d+/hw\d+(?:/.*)?$',  # 기본 패턴
                 "/test-1-123456789/hw1/main.c",
                 "hw1"
             ),
             (
-                r'^/(?:os|network)-[1-5]-\d{9}/hw[1-9](?:/|$)',
+                r'^/(?:os|network)-[1-5]-\d{9}/hw[1-9](?:/.*)?$',  # 더 엄격한 패턴
                 "/os-3-202012345/hw1/main.c",
                 "hw1"
             ),
             (
-                r'^/os-\d+-\d+/hw\d+(?:/|$)',
+                r'^/os-\d+-\d+/hw\d+(?:/.*)?$',  # os 과목만 허용
                 "/network-1-123456789/hw1/main.c",
                 None
             )

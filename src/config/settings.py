@@ -38,13 +38,10 @@ class Settings:
             'jcode-os-1,watcher'
         ).split(',')
         
-        # 프로젝트 설정
-        self.project_root: str = os.getenv('PROJECT_ROOT', '/home/coder/project')
-        
         # 과제 경로 패턴 설정
         self.homework_path_pattern: str = os.getenv(
             'HOMEWORK_PATH_PATTERN',
-            r'^/[a-z]+-\d+-\d+/hw\d+(?:/|$)'
+            r'^/[a-z]+-\d+-\d+/hw\d+(?:/.*)?$'
         )
         
         # 과제 경로 패턴 유효성 검사
