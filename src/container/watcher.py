@@ -18,7 +18,7 @@ class AsyncPodWatcher:
             
             print(f"\n시작 리소스 버전: {pods.metadata.resource_version}")
             print(f"{self.namespace} 네임스페이스 모니터링 시작...")
-            self.repository.print_current_state()
+            # self.repository.print_current_state()
 
             # 비동기 Watch 스트림 처리
             async with watch.Watch() as w:
@@ -36,7 +36,7 @@ class AsyncPodWatcher:
             self._sync_pod_container_state(pod)
     
     def _handle_pod_event(self, event: Dict[str, Any]) -> None:
-        """파드 이벤트 처리"""
+        """파드 이벤트 처리""" 
         event_type = event['type']
         pod = event['object']
         

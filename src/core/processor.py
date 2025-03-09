@@ -14,13 +14,15 @@ class AsyncEventProcessor:
     def __init__(self, 
                  event_queue: asyncio.Queue,
                  parser_registry: Dict[ProcessType, Parser],
-                 homework_checker: HomeworkChecker):
+                 homework_checker: HomeworkChecker,
+                 container_repository: 'ContainerHashRepository'):  # 타입 힌트는 문자열로
         self.event_queue = event_queue
         self.logger = logging.getLogger(__name__)
         self._running = True
         self.process_filter = ProcessFilter()
         self.parsers = parser_registry
         self.hw_checker = homework_checker
+        self.container_repository = container_repository  # 컨테이너 저장소 참조 저장
         self.logger.info("[초기화] AsyncEventProcessor 초기화 완료")
 
     async def prepare_event(self, data: Any, size: int) -> ProcessEventData:
