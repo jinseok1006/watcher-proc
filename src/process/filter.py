@@ -48,14 +48,13 @@ class ProcessFilter:
                     return proc_type
 
             # 2. 과제 디렉토리 내 실행 파일 체크
-            if binary_path.startswith('/home/coder/project'):
-                if hw_dir := self.hw_checker.get_homework_info(binary_path):
-                    self.logger.info(
-                        f"[감지] 과제 실행 파일: "
-                        f"경로: {binary_path}, "
-                        f"과제: {hw_dir}"
-                    )
-                    return ProcessType.USER_BINARY
+            if hw_dir := self.hw_checker.get_homework_info(binary_path):
+                self.logger.info(
+                    f"[감지] 과제 실행 파일: "
+                    f"경로: {binary_path}, "
+                    f"과제: {hw_dir}"
+                )
+                return ProcessType.USER_BINARY
 
             # 3. 그 외는 무시
             self.logger.debug(f"[스킵] 무시된 프로세스: {binary_path}")
