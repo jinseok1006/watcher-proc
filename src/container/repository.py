@@ -1,4 +1,5 @@
 from typing import Dict, Optional, Set, Tuple
+import logging
 
 class ContainerHashRepository:
     """컨테이너 해시와 파드 정보를 저장하는 저장소"""
@@ -7,6 +8,7 @@ class ContainerHashRepository:
         self.pods: Dict[Tuple[str, str], dict] = {}
         # 컨테이너 해시 -> (namespace, pod_name) 매핑
         self.container_to_pod: Dict[str, Tuple[str, str]] = {}
+        self.logger = logging.getLogger(__name__)
 
     def save_pod_containers(self, namespace: str, pod_name: str, container_hashes: Set[str], pod_info: dict) -> None:
         """파드와 그 컨테이너 정보 저장/업데이트
@@ -82,9 +84,9 @@ class ContainerHashRepository:
 
     def print_current_state(self) -> None:
         """현재 저장소 상태 출력"""
-        print("\n현재 매핑 상태:")
+        self.logger.info("[상태] 현재 컨테이너 매핑 상태")
         if not self.pods:
-            print("(비어있음)")
+            self.logger.info("(비어있음)")
             return
             
         # 네임스페이스별로 그룹화하여 출력
@@ -96,9 +98,9 @@ class ContainerHashRepository:
         
         # 정렬된 출력
         for ns in sorted(by_namespace.keys()):
-            print(f"\n네임스페이스: {ns}")
+            self.logger.info(f"[상태] 네임스페이스: {ns}")
             for pod_name, container_hashes in sorted(by_namespace[ns]):
-                print(f"  파드: {pod_name}")
+                self.logger.info(f"[상태]   파드: {pod_name}")
                 for hash_val in sorted(container_hashes):
-                    print(f"    - 컨테이너: {hash_val}")
+                    self.logger.info(f"[상태]     - 컨테이너: {hash_val}")
 

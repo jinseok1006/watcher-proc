@@ -2,12 +2,14 @@ from kubernetes_asyncio import client, config, watch
 from .repository import ContainerHashRepository
 from typing import List, Dict, Any
 import asyncio
+import logging
 
 class AsyncPodWatcher:
     def __init__(self, namespace: str, repository: ContainerHashRepository, api: client.CoreV1Api):
         self.namespace = namespace
         self.repository = repository
         self.api = api
+        self.logger = logging.getLogger(__name__)
     
     async def start(self):
         """파드 모니터링 시작"""
@@ -16,9 +18,9 @@ class AsyncPodWatcher:
             pods = await self.api.list_namespaced_pod(self.namespace)
             self._sync_initial_state(pods.items)
             
-            print(f"\n시작 리소스 버전: {pods.metadata.resource_version}")
-            print(f"{self.namespace} 네임스페이스 모니터링 시작...")
-            # self.repository.print_current_state()
+            self.logger.info(f"[쿠버네티스] {self.namespace} 네임스페이스 리소스 버전: {pods.metadata.resource_version}")
+            self.logger.info(f"[시작] {self.namespace} 네임스페이스 모니터링 시작")
+            self.repository.print_current_state()
 
             # 비동기 Watch 스트림 처리
             async with watch.Watch() as w:
@@ -28,7 +30,7 @@ class AsyncPodWatcher:
                     self._handle_pod_event(event)
                 
         except client.exceptions.ApiException as e:
-            print(f"쿠버네티스 API 오류: {e}")
+            self.logger.error(f"[오류] 쿠버네티스 API 오류: {e}")
 
     def _sync_initial_state(self, pods: List[Any]) -> None:
         """초기 파드 상태 동기화"""
@@ -40,7 +42,7 @@ class AsyncPodWatcher:
         event_type = event['type']
         pod = event['object']
         
-        print(f"\n이벤트 발생: {event_type} - {pod.metadata.name}")
+        self.logger.info(f"[이벤트] {self.namespace}/{pod.metadata.name} - {event_type}")
         
         if event_type in ['ADDED', 'MODIFIED']:
             self._sync_pod_container_state(pod)

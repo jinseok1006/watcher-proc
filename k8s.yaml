@@ -16,10 +16,9 @@ spec:
       hostPID: true  # 호스트 PID 네임스페이스 접근
       containers:
       - name: watcher-proc
-        image: watcher-proc:1
+        image: watcher-proc:latest
         imagePullPolicy: IfNotPresent  # 로컬 이미지 사용
         securityContext:
-          privileged: false     # privileged 모드 사용하지 않음
           capabilities:
             drop: ["ALL"]
             add: ["SYS_ADMIN", "SYS_PTRACE"]  # 필요한 capabilities만 추가

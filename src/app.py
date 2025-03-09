@@ -67,12 +67,12 @@ async def main():
         )
         
         # 3. 워쳐 태스크들을 백그라운드로 시작
-        # watcher_tasks = [asyncio.create_task(w.start()) for w in watchers]
+        watcher_tasks = [asyncio.create_task(w.start()) for w in watchers]
         
         try:
             # 메인 프로세스 실행하면서 워쳐 태스크들도 함께 실행
-            # await asyncio.gather(processor.run(), *watcher_tasks)
-            await processor.run()
+            await asyncio.gather(processor.run(), *watcher_tasks)
+            # await processor.run()
             
         except asyncio.CancelledError:
             logger.info("[종료] 프로그램 종료 요청")
