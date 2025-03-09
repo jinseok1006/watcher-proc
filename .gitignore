@@ -4,3 +4,4 @@ log_audit.py
 *.tar
 
 exefile.py
+venv
