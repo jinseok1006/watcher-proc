@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import ctypes
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, Optional, Any
 from ..process.types import ProcessType
@@ -8,6 +9,43 @@ from ..process.filter import ProcessFilter
 from ..parser.base import Parser, CommandResult
 from ..homework.base import HomeworkChecker
 from ..bpf.event import ProcessEvent, ProcessEventData
+
+
+@dataclass
+class EnrichedProcessEvent:
+    """확장된 프로세스 이벤트 데이터"""
+    # BPF 이벤트 필드들
+    timestamp: str
+    pid: int
+    process_type: ProcessType
+    binary_path: str
+    container_id: str
+    cwd: str
+    args: str
+    error_flags: str
+    exit_code: int
+    
+    # 쿠버네티스 관련 확장 필드들
+    pod_name: str
+    namespace: str
+    class_div: str  # e.g. "os-1"
+    student_id: str  # e.g. "202012180"
+    
+    @classmethod
+    def from_bpf_event(cls, bpf_event: ProcessEventData, **extra_fields) -> 'EnrichedProcessEvent':
+        return cls(
+            timestamp=bpf_event.timestamp,
+            pid=bpf_event.pid,
+            process_type=bpf_event.process_type,
+            binary_path=bpf_event.binary_path,
+            container_id=bpf_event.container_id,
+            cwd=bpf_event.cwd,
+            args=bpf_event.args,
+            error_flags=bpf_event.error_flags,
+            exit_code=bpf_event.exit_code,
+            **extra_fields
+        )
+
 
 class AsyncEventProcessor:
     """비동기 이벤트 처리"""
@@ -52,54 +90,80 @@ class AsyncEventProcessor:
         self.logger.debug(f"[이벤트 준비 완료] 데이터: {event_data}")
         return event_data
 
-    async def handle_process_event(self, event: ProcessEventData) -> None:
+    async def enrich_event(self, bpf_event: ProcessEventData) -> Optional[EnrichedProcessEvent]:
+        """BPF 이벤트를 확장된 이벤트로 변환"""
+        if not bpf_event.container_id:
+            self.logger.error(f"[오류] 컨테이너 ID가 없는 이벤트: {bpf_event}")
+            return None
+            
+        pod_info = await self.container_repository.get_pod_info(bpf_event.container_id)
+        if not pod_info:
+            self.logger.debug(f"[스킵] 컨테이너 ID에 매핑되는 파드 정보 없음: {bpf_event.container_id}")
+            return None
+        
+        # 파드 네임 파싱: "jcode-os-1-202012180-hash(-hash...)"
+        parts = pod_info.name.split('-')
+        if len(parts) < 5:  # 최소 5개 부분은 있어야 함
+            self.logger.error(f"[스킵] 잘못된 파드 네임 형식: {pod_info.name}")
+            return None
+            
+        class_div = f"{parts[1]}-{parts[2]}"  # "os-1" (항상 2,3번째 부분)
+        student_id = parts[3]  # "202012180" (항상 4번째 부분)
+        
+        self.logger.debug(
+            f"[컨테이너-파드 매핑] "
+            f"컨테이너 ID: {bpf_event.container_id}, "
+            f"파드: {pod_info.name}, "
+            f"분반: {class_div}, "
+            f"학번: {student_id}"
+        )
+        
+        return EnrichedProcessEvent.from_bpf_event(
+            bpf_event,
+            pod_name=pod_info.name,
+            namespace=pod_info.namespace,
+            class_div=class_div,
+            student_id=student_id
+        )
+
+    async def handle_process_event(self, event: EnrichedProcessEvent) -> None:
         self.logger.info(
             f"프로세스 정보: "
             f"PID={event.pid}, "
             f"타입={event.process_type.name}, "
-            f"경로={event.binary_path}"
+            f"경로={event.binary_path}, "
+            f"파드={event.pod_name}, "
+            f"분반={event.class_div}, "
+            f"학번={event.student_id}"
         )
 
         # 1. 사용자 바이너리 실행 처리
         if event.process_type == ProcessType.USER_BINARY:
             try:
                 hw_dir = self.hw_checker.get_homework_info(event.binary_path)
-                if hw_dir:
+                if hw_dir:  # hw1과 같은 형태
                     self.logger.info(
-                        f"[실행 감지] "
-                        f"과제: {hw_dir}, "
-                        f"실행 파일: {event.binary_path}, "
-                        f"작업 디렉토리: {event.cwd}, "
-                        f"명령줄: {event.args}, "
-                        f"종료 코드: {event.exit_code}"
+                        f"[API 발송 준비] 바이너리 실행: "
+                        f"과제={hw_dir}, "
+                        f"학번={event.student_id}, "
+                        f"분반={event.class_div}, "
+                        f"실행 파일={event.binary_path}, "
+                        f"작업 디렉토리={event.cwd}, "
+                        f"명령줄={event.args}, "
+                        f"종료 코드={event.exit_code}, "
+                        f"타임스탬프={event.timestamp}"
                     )
-                    # TODO: API 호출 준비
-                    # {
-                    #     "homework_dir": hw_dir,
-                    #     "binary_path": event.binary_path,
-                    #     "working_dir": event.cwd,
-                    #     "command_line": event.args,
-                    #     "exit_code": event.exit_code,
-                    #     "timestamp": event.timestamp
-                    # }
+                    # TODO: API 호출
                 else:
-                    self.logger.debug(
-                        f"[무시] 과제 디렉토리 외 실행 파일: {event.binary_path}"
-                    )
+                    self.logger.debug(f"[무시] 과제 디렉토리 외 실행 파일: {event.binary_path}")
             except Exception as e:
-                self.logger.error(
-                    f"[오류] 과제 실행 파일 처리 중 오류 발생: {str(e)}, "
-                    f"경로: {event.binary_path}"
-                )
+                self.logger.error(f"[오류] 과제 실행 파일 처리 중 오류 발생: {str(e)}, 경로: {event.binary_path}")
             return
 
         # 2. 컴파일러 실행 처리
         parser = self.parsers.get(event.process_type)
         if not parser:
-            self.logger.info(
-                f"[처리 중단] "
-                f"사유: 지원하지 않는 프로세스 타입({event.process_type.name})"
-            )
+            self.logger.info(f"[처리 중단] 사유: 지원하지 않는 프로세스 타입({event.process_type.name})")
             return
             
         cmd = parser.parse(event.args, event.cwd)
@@ -108,16 +172,19 @@ class AsyncEventProcessor:
             hw_dir = self.hw_checker.get_homework_info(source_file)
             if hw_dir:
                 self.logger.info(
-                    f"[과제 파일 감지] "
-                    f"디렉토리: {hw_dir}, "
-                    f"파일: {source_file}"
+                    f"[API 발송 준비] 컴파일: "
+                    f"과제={hw_dir}, "
+                    f"학번={event.student_id}, "
+                    f"분반={event.class_div}, "
+                    f"소스={source_file}, "
+                    f"컴파일러={event.binary_path}, "
+                    f"작업 디렉토리={event.cwd}, "
+                    f"명령줄={event.args}, "
+                    f"타임스탬프={event.timestamp}"
                 )
-                # TODO: API 호출 준비
+                # TODO: API 호출
             else:
-                self.logger.debug(
-                    f"[과제 외 파일] "
-                    f"파일: {source_file}"
-                )
+                self.logger.debug(f"[무시] 과제 외 파일: {source_file}")
 
     async def run(self) -> None:
         """이벤트 처리 메인 루프"""
@@ -125,12 +192,24 @@ class AsyncEventProcessor:
         while self._running:
             try:
                 data, size = await self.event_queue.get()
-                event = await self.prepare_event(data, size)
                 
-                if event.process_type != ProcessType.UNKNOWN:
-                    await self.handle_process_event(event)
-                else:
+                # 1. BPF 이벤트 준비
+                bpf_event = await self.prepare_event(data, size)
+                
+                # 2. 알 수 없는 프로세스 타입 필터링
+                if bpf_event.process_type == ProcessType.UNKNOWN:
                     self.logger.debug(f"[스킵] 알 수 없는 프로세스 타입")
+                    self.event_queue.task_done()
+                    continue
+                
+                # 3. 이벤트 확장 (컨테이너 -> 파드 정보)
+                enriched_event = await self.enrich_event(bpf_event)
+                if enriched_event is None:
+                    self.event_queue.task_done()
+                    continue
+                
+                # 4. 이벤트 처리
+                await self.handle_process_event(enriched_event)
                 
                 self.event_queue.task_done()
             except asyncio.CancelledError:
