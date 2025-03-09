@@ -2,14 +2,14 @@ import logging
 from pathlib import Path
 from .base import Parser, CommandResult
 from ..process.types import ProcessType
-from ..config.settings import COMPILER_SKIP_OPTIONS
+from ..config.settings import settings
 
 class CCompilerParser(Parser):
     """gcc/clang 명령어 파서"""
     def __init__(self, process_type: ProcessType):
         self.process_type = process_type
         self.logger = logging.getLogger(__name__)
-        self.skip_options = COMPILER_SKIP_OPTIONS
+        self.skip_options = settings.COMPILER_SKIP_OPTIONS
         self.logger.info(f"[초기화] {process_type.name} 파서 생성됨")
     
     def parse(self, args: str, cwd: str) -> CommandResult:

@@ -2,11 +2,11 @@ import logging
 from pathlib import Path
 from typing import Optional
 from .base import HomeworkChecker
-from ..config.settings import PROJECT_ROOT
+from ..config.settings import settings
 
 class DefaultHomeworkChecker(HomeworkChecker):
     """기본 과제 디렉토리 체커 구현"""
-    def __init__(self, project_root: str = PROJECT_ROOT):
+    def __init__(self, project_root: str = settings.project_root):
         self.project_root = Path(project_root)
         self.logger = logging.getLogger(__name__)
         self.logger.info(f"[초기화] 프로젝트 루트 설정: {project_root}")

@@ -1,13 +1,14 @@
 import logging
+from typing import Dict, List
 from .types import ProcessType
-from ..config.settings import PROCESS_PATTERNS
+from ..config.settings import settings
 
 class ProcessFilter:
     """프로세스 타입 결정"""
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.patterns = {
-            ProcessType[k]: v for k, v in PROCESS_PATTERNS.items()
+        self.patterns: Dict[ProcessType, List[str]] = {
+            ProcessType[k]: v for k, v in settings.PROCESS_PATTERNS.items()
         }
         self.logger.info(f"[초기화] 프로세스 패턴: {self.patterns}")
 

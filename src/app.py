@@ -14,6 +14,7 @@ from .bpf.collector import BPFCollector
 from .core.processor import AsyncEventProcessor
 from .container.repository import ContainerHashRepository
 from .container.watcher import AsyncPodWatcher
+from .config.settings import settings
 
 def setup_parser_registry() -> Dict[ProcessType, Parser]:
     """파서 레지스트리 설정"""
@@ -46,9 +47,10 @@ async def main():
         k8s_api = client.CoreV1Api()
         container_repository = ContainerHashRepository()
         
+        # settings에서 감시할 네임스페이스 목록 가져오기
         watchers = [
-            AsyncPodWatcher("jcode-os-1", container_repository, k8s_api),
-            AsyncPodWatcher("watcher", container_repository, k8s_api)
+            AsyncPodWatcher(namespace, container_repository, k8s_api)
+            for namespace in settings.watch_namespaces
         ]
         
         # 2. 기존 컴포넌트 초기화
