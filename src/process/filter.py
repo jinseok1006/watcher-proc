@@ -2,14 +2,16 @@ import logging
 from typing import Dict, List
 from .types import ProcessType
 from ..config.settings import settings
+from ..homework.base import HomeworkChecker
 
 class ProcessFilter:
     """프로세스 타입 결정"""
-    def __init__(self):
+    def __init__(self, homework_checker: HomeworkChecker):
         self.logger = logging.getLogger(__name__)
         self.patterns: Dict[ProcessType, List[str]] = {
             ProcessType[k]: v for k, v in settings.PROCESS_PATTERNS.items()
         }
+        self.hw_checker = homework_checker
         self.logger.info(f"[초기화] 프로세스 패턴: {self.patterns}")
 
     def get_process_type(self, binary_path: str, container_id: str = "") -> ProcessType:

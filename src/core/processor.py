@@ -57,9 +57,9 @@ class AsyncEventProcessor:
         self.event_queue = event_queue
         self.logger = logging.getLogger(__name__)
         self._running = True
-        self.process_filter = ProcessFilter()
-        self.parsers = parser_registry
         self.hw_checker = homework_checker
+        self.process_filter = ProcessFilter(homework_checker)  # homework_checker 전달
+        self.parsers = parser_registry
         self.container_repository = container_repository  # 컨테이너 저장소 참조 저장
         self.logger.info("[초기화] AsyncEventProcessor 초기화 완료")
 
@@ -96,15 +96,17 @@ class AsyncEventProcessor:
             self.logger.error(f"[오류] 컨테이너 ID가 없는 이벤트: {bpf_event}")
             return None
             
-        pod_info = await self.container_repository.get_pod_info(bpf_event.container_id)
+        # 컨테이너 ID의 처음 12자리가 해시값
+        container_hash = bpf_event.container_id[:12]
+        pod_info = self.container_repository.find_by_hash(container_hash)
         if not pod_info:
-            self.logger.debug(f"[스킵] 컨테이너 ID에 매핑되는 파드 정보 없음: {bpf_event.container_id}")
+            self.logger.debug(f"[스킵] 컨테이너 해시에 매핑되는 파드 정보 없음: {container_hash}")
             return None
         
         # 파드 네임 파싱: "jcode-os-1-202012180-hash(-hash...)"
-        parts = pod_info.name.split('-')
+        parts = pod_info['pod_name'].split('-')
         if len(parts) < 5:  # 최소 5개 부분은 있어야 함
-            self.logger.error(f"[스킵] 잘못된 파드 네임 형식: {pod_info.name}")
+            self.logger.error(f"[스킵] 잘못된 파드 네임 형식: {pod_info['pod_name']}")
             return None
             
         class_div = f"{parts[1]}-{parts[2]}"  # "os-1" (항상 2,3번째 부분)
@@ -112,16 +114,16 @@ class AsyncEventProcessor:
         
         self.logger.debug(
             f"[컨테이너-파드 매핑] "
-            f"컨테이너 ID: {bpf_event.container_id}, "
-            f"파드: {pod_info.name}, "
+            f"컨테이너 해시: {container_hash}, "
+            f"파드: {pod_info['pod_name']}, "
             f"분반: {class_div}, "
             f"학번: {student_id}"
         )
         
         return EnrichedProcessEvent.from_bpf_event(
             bpf_event,
-            pod_name=pod_info.name,
-            namespace=pod_info.namespace,
+            pod_name=pod_info['pod_name'],
+            namespace=pod_info['namespace'],
             class_div=class_div,
             student_id=student_id
         )
