@@ -2,9 +2,10 @@ import os
 import logging
 import threading
 import asyncio
-from typing import Optional, Any, Tuple
+from typing import Optional, Any
 from bcc import BPF
-from .event import ProcessEvent
+from .event import RawBpfStruct
+import ctypes
 
 class BPFCollector:
     """BPF 이벤트 수집 담당"""
@@ -13,15 +14,24 @@ class BPFCollector:
         self.bpf: Optional[BPF] = None
         self.logger = logging.getLogger(__name__)
         self._running = True
-        self._loop = asyncio.get_event_loop()
+        self._loop = asyncio.get_running_loop()
         self.logger.info("[초기화] BPFCollector 초기화 완료")
 
     def event_callback(self, cpu: int, data: Any, size: int) -> None:
-        """BPF 이벤트 콜백"""
+        """BPF 이벤트 콜백
+        
+        커널에서 받은 이벤트를 파이썬 이벤트 객체로 변환하여 큐에 전달합니다.
+        """
         try:
+            # 커널 구조체를 파이썬 객체로 변환
+            raw_struct = ctypes.cast(data, ctypes.POINTER(RawBpfStruct)).contents
+            # 구조체를 이벤트로 변환
+            raw_event = raw_struct.to_event()
+            
+            # 이벤트 큐에 전달
             self._loop.call_soon_threadsafe(
                 self.event_queue.put_nowait,
-                (data, size)
+                raw_event
             )
         except Exception as e:
             self.logger.error(f"[오류] 콜백 처리 중 오류: {e}")
@@ -36,10 +46,9 @@ class BPFCollector:
             
             self.bpf = BPF(text=bpf_text)
             
-            # 핸들러 설정
+            # 핸들러 설정 (새로운 순서)
             handlers = [
                 self.bpf.load_func("init_handler", BPF.TRACEPOINT),
-                self.bpf.load_func("container_handler", BPF.TRACEPOINT),
                 self.bpf.load_func("binary_handler", BPF.TRACEPOINT),
                 self.bpf.load_func("cwd_handler", BPF.TRACEPOINT),
                 self.bpf.load_func("args_handler", BPF.TRACEPOINT)

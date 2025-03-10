@@ -2,7 +2,7 @@ import aiohttp
 import logging
 from typing import Dict, Any
 from ..config.settings import settings
-from ..types.events import EnrichedProcessEvent
+from ..events.models import EventBuilder
 
 class APIClient:
     """API 클라이언트"""
@@ -39,42 +39,42 @@ class APIClient:
             self.logger.error(f"[API 오류] 예상치 못한 오류: {str(e)}, 데이터={data}")
             return False
 
-    async def send_binary_execution(self, event: EnrichedProcessEvent, hw_dir: str) -> bool:
+    async def send_binary_execution(self, event: EventBuilder, hw_dir: str) -> bool:
         """바이너리 실행 이벤트 전송"""
         # URL 패턴: /api/:class_div/:hw_name/:student_id/logs/run
-        endpoint = f"/api/{event.class_div}/{hw_dir}/{event.student_id}/logs/run"
+        endpoint = f"/api/{event.metadata.student.class_div}/{hw_dir}/{event.metadata.student.student_id}/logs/run"
         
         data = {
-            'pod_name': event.pod_name,
-            'container_id': event.container_id,
-            'pid': event.pid,
-            'binary_path': event.binary_path,
-            'working_dir': event.cwd,
-            'command_line': event.args,
-            'exit_code': event.exit_code,
-            'error_flags': event.error_flags,
-            'timestamp': event.timestamp
+            'pod_name': event.base.hostname,
+            'container_id': "unknown",  # TODO: 컨테이너 ID 추가
+            'pid': event.base.pid,
+            'binary_path': event.base.binary_path,
+            'working_dir': event.base.cwd,
+            'command_line': event.base.command,
+            'exit_code': 0,  # TODO: 종료 코드 추가
+            'error_flags': [],  # TODO: 에러 플래그 추가
+            'timestamp': event.metadata.timestamp.isoformat()
         }
         return await self._send_event(endpoint, data)
 
     async def send_compilation(self, 
-                             event: EnrichedProcessEvent, 
+                             event: EventBuilder, 
                              hw_dir: str,
                              source_file: str) -> bool:
         """컴파일 이벤트 전송"""
         # URL 패턴: /api/:class_div/:hw_name/:student_id/logs/build
-        endpoint = f"/api/{event.class_div}/{hw_dir}/{event.student_id}/logs/build"
+        endpoint = f"/api/{event.metadata.student.class_div}/{hw_dir}/{event.metadata.student.student_id}/logs/build"
         
         data = {
-            'pod_name': event.pod_name,
-            'container_id': event.container_id,
-            'pid': event.pid,
+            'pod_name': event.base.hostname,
+            'container_id': "unknown",  # TODO: 컨테이너 ID 추가
+            'pid': event.base.pid,
             'source_file': source_file,
-            'compiler_path': event.binary_path,
-            'working_dir': event.cwd,
-            'command_line': event.args,
-            'exit_code': event.exit_code,
-            'error_flags': event.error_flags,
-            'timestamp': event.timestamp
+            'compiler_path': event.base.binary_path,
+            'working_dir': event.base.cwd,
+            'command_line': event.base.command,
+            'exit_code': 0,  # TODO: 종료 코드 추가
+            'error_flags': [],  # TODO: 에러 플래그 추가
+            'timestamp': event.metadata.timestamp.isoformat()
         }
         return await self._send_event(endpoint, data) 

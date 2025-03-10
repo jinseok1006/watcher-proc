@@ -1,17 +1,15 @@
 #include <uapi/linux/ptrace.h>
 #include <linux/sched.h>
 #include <linux/nsproxy.h>
-#include <linux/cgroup.h>
 #include <linux/dcache.h>
 #include <linux/fs.h>
 #include <linux/fs_struct.h>
 #include <linux/mm_types.h>
+#include <linux/utsname.h>
 
-#define CONTAINER_ID_LEN 12
 #define MAX_PATH_LEN 256
-#define ARGSIZE 384
-#define DOCKER_PREFIX_LEN 7        // "docker-" 길이
-#define CONTAINERD_PREFIX_LEN 15   // "cri-containerd-" 길이
+#define ARGSIZE 256
+#define UTS_LEN 65
 #define MAX_DENTRY_LEVEL 16
 #define MAX_DNAME_LEN 64
 
@@ -24,11 +22,11 @@
 struct data_t {
     u32 pid;
     u32 error_flags;
-    char container_id[CONTAINER_ID_LEN];
-    char binary_path[MAX_PATH_LEN];    // 추가: 바이너리 경로
+    char hostname[UTS_LEN];
+    char binary_path[MAX_PATH_LEN];
     char cwd[MAX_PATH_LEN];
     char args[ARGSIZE];
-    int binary_path_offset;            // 추가: 바이너리 경로 오프셋
+    int binary_path_offset;
     int cwd_offset;
     u32 args_len;
     int exit_code;
@@ -36,103 +34,8 @@ struct data_t {
 
 BPF_PERCPU_ARRAY(tmp_array, struct data_t, 1);
 BPF_HASH(process_data, u32, struct data_t);
-BPF_PROG_ARRAY(prog_array, 5);
+BPF_PROG_ARRAY(prog_array, 4);
 BPF_PERF_OUTPUT(events);
-
-static __always_inline bool check_prefix_and_extract(const char *name, const char *prefix, int prefix_len, char *container_id, int offset) {
-    #pragma unroll
-    for (int i = 0; i < prefix_len; i++) {
-        if (name[i] != prefix[i])
-            return false;
-    }
-    
-    // container ID 길이 체크 (최소 12자)
-    #pragma unroll
-    for (int i = 0; i < 12; i++) {
-        char c;
-        bpf_probe_read_kernel(&c, 1, name + offset + i);
-        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
-            return false;
-    }
-    
-    // 유효한 컨테이너 ID인 경우 복사
-    #pragma unroll
-    for (int i = 0; i < CONTAINER_ID_LEN; i++) {
-        char c;
-        bpf_probe_read_kernel(&c, 1, name + offset + i);
-        if (c == '.' || c == 0)
-            break;
-        container_id[i] = c;
-    }
-    
-    return true;
-}
-
-// 첫 번째 핸들러: 공간 확보 및 PID 설정
-int init_handler(struct pt_regs *ctx) {
-    u32 pid = bpf_get_current_pid_tgid() >> 32;
-    u32 zero = 0;
-    
-    struct data_t *tmp = tmp_array.lookup(&zero);
-    if (!tmp)
-        return 0;
-    
-    tmp->pid = pid;
-    process_data.update(&pid, tmp);
-    prog_array.call(ctx, 1);  // container_handler로
-    return 0;
-}
-
-// 두 번째 핸들러: 컨테이너 ID 수집
-int container_handler(struct pt_regs *ctx) {
-    u32 pid = bpf_get_current_pid_tgid() >> 32;
-    struct data_t *data = process_data.lookup(&pid);
-    if (!data) {
-        process_data.delete(&pid);
-        return 0;
-    }
-    
-    // task_struct에서 cgroup 정보 가져오기
-    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
-    if (!task) {
-        process_data.delete(&pid);
-        return 0;
-    }
-
-    struct cgroup *cgrp = task->cgroups->dfl_cgrp;
-    if (!cgrp) {
-        process_data.delete(&pid);
-        return 0;
-    }
-        
-    struct kernfs_node *kn = cgrp->kn;
-    if (!kn) {
-        process_data.delete(&pid);
-        return 0;
-    }
-    
-    // cgroup 이름 읽기
-    char cgroup_name[MAX_PATH_LEN];
-    bpf_probe_read_kernel_str(cgroup_name, sizeof(cgroup_name), (void *)kn->name);
-    
-    // docker 형식 확인 (docker-)
-    if (check_prefix_and_extract(cgroup_name, "docker-", DOCKER_PREFIX_LEN, 
-        data->container_id, DOCKER_PREFIX_LEN)) {
-        prog_array.call(ctx, 2);  // cwd_handler로
-        return 0;
-    }
-    
-    // containerd 형식 확인 (cri-containerd-)
-    if (check_prefix_and_extract(cgroup_name, "cri-containerd-", CONTAINERD_PREFIX_LEN,
-        data->container_id, CONTAINERD_PREFIX_LEN)) {
-        prog_array.call(ctx, 2);  // cwd_handler로
-        return 0;
-    }
-    
-    // 컨테이너가 아닌 경우
-    process_data.delete(&pid);
-    return 0;
-}
 
 static __always_inline int get_dentry_path(struct dentry *dentry, char *buf, int buf_size, u32 *error_flags)
 {
@@ -193,6 +96,94 @@ static __always_inline int get_dentry_path(struct dentry *dentry, char *buf, int
     return pos;
 }
 
+// 첫 번째 핸들러: 호스트네임 검증 및 PID 설정
+int init_handler(struct pt_regs *ctx) {
+    u32 pid = bpf_get_current_pid_tgid() >> 32;
+    u32 zero = 0;
+    
+    struct data_t *tmp = tmp_array.lookup(&zero);
+    if (!tmp)
+        return 0;
+    
+    // 기본 정보 설정
+    tmp->pid = pid;
+    
+    // UTS namespace에서 hostname 읽기
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    if (!task)
+        return 0;
+    
+    struct nsproxy *ns = task->nsproxy;
+    if (!ns)
+        return 0;
+    
+    struct uts_namespace *uts_ns = ns->uts_ns;
+    if (!uts_ns)
+        return 0;
+    
+    // hostname 읽기
+    bpf_probe_read_kernel_str(tmp->hostname, UTS_LEN, uts_ns->name.nodename);
+
+
+    // jcode- 접두어 확인
+    // if (tmp->hostname[0] != 'j' || 
+    //     tmp->hostname[1] != 'c' ||
+    //     tmp->hostname[2] != 'o' ||
+    //     tmp->hostname[3] != 'd' ||
+    //     tmp->hostname[4] != 'e' ||
+    //     tmp->hostname[5] != '-') {
+    //     return 0;
+    // }
+    
+    // 모든 검증을 통과한 경우에만 맵에 등록
+    process_data.update(&pid, tmp);
+    prog_array.call(ctx, 1);  // binary_handler로
+    return 0;
+}
+
+// 두 번째 핸들러: 바이너리 경로 수집
+int binary_handler(struct pt_regs *ctx) {
+    u32 pid = bpf_get_current_pid_tgid() >> 32;
+    struct data_t *data = process_data.lookup(&pid);
+    if (!data) {
+        process_data.delete(&pid);
+        return 0;
+    }
+    
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    if (!task) {
+        process_data.delete(&pid);
+        return 0;
+    }
+
+    struct mm_struct *mm;
+    bpf_probe_read(&mm, sizeof(mm), &task->mm);
+    if (!mm) {
+        process_data.delete(&pid);
+        return 0;
+    }
+
+    struct file *exe_file;
+    bpf_probe_read(&exe_file, sizeof(exe_file), &mm->exe_file);
+    if (!exe_file) {
+        process_data.delete(&pid);
+        return 0;
+    }
+
+    struct path fpath;
+    bpf_probe_read(&fpath, sizeof(fpath), &exe_file->f_path);
+
+    data->binary_path_offset = get_dentry_path(
+        fpath.dentry,
+        data->binary_path,
+        sizeof(data->binary_path),
+        &data->error_flags
+    );
+
+    prog_array.call(ctx, 2);  // cwd_handler로
+    return 0;
+}
+
 // 세 번째 핸들러: CWD 수집
 int cwd_handler(struct pt_regs *ctx) {
     u32 pid = bpf_get_current_pid_tgid() >> 32;
@@ -225,7 +216,7 @@ int cwd_handler(struct pt_regs *ctx) {
 
     data->cwd_offset = get_dentry_path(dentry, data->cwd, sizeof(data->cwd), &data->error_flags);
     
-    prog_array.call(ctx, 4);  // args_handler로
+    prog_array.call(ctx, 3);  // args_handler로
     return 0;
 }
 
@@ -293,48 +284,5 @@ int exit_handler(struct pt_regs *ctx) {
     
     // 맵에서 데이터 삭제
     process_data.delete(&pid);
-    return 0;
-}
-
-// binary_handler 추가
-int binary_handler(struct pt_regs *ctx) {
-    u32 pid = bpf_get_current_pid_tgid() >> 32;
-    struct data_t *data = process_data.lookup(&pid);
-    if (!data) {
-        process_data.delete(&pid);
-        return 0;
-    }
-    
-    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
-    if (!task) {
-        process_data.delete(&pid);
-        return 0;
-    }
-
-    struct mm_struct *mm;
-    bpf_probe_read(&mm, sizeof(mm), &task->mm);
-    if (!mm) {
-        process_data.delete(&pid);
-        return 0;
-    }
-
-    struct file *exe_file;
-    bpf_probe_read(&exe_file, sizeof(exe_file), &mm->exe_file);
-    if (!exe_file) {
-        process_data.delete(&pid);
-        return 0;
-    }
-
-    struct path fpath;
-    bpf_probe_read(&fpath, sizeof(fpath), &exe_file->f_path);
-
-    data->binary_path_offset = get_dentry_path(
-        fpath.dentry,
-        data->binary_path,
-        sizeof(data->binary_path),
-        &data->error_flags
-    );
-
-    prog_array.call(ctx, 3);  // cwd_handler로
     return 0;
 } 
