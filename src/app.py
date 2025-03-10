@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any
 # 상수 정의
 UTS_LEN = 65
 MAX_PATH_LEN = 256
-ARGSIZE = 384
+ARGSIZE = 256
 
 class ProcessEvent(ctypes.Structure):
     """프로세스 이벤트 데이터 구조체"""

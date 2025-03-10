@@ -9,7 +9,7 @@
 #include <linux/utsname.h>
 
 #define MAX_PATH_LEN 256
-#define ARGSIZE 384
+#define ARGSIZE 256
 #define UTS_LEN 65
 #define MAX_DENTRY_LEVEL 16
 #define MAX_DNAME_LEN 64
@@ -126,14 +126,14 @@ int init_handler(struct pt_regs *ctx) {
     bpf_probe_read_kernel_str(tmp->hostname, UTS_LEN, uts_ns->name.nodename);
     
     // jcode- 접두어 확인
-    if (tmp->hostname[0] != 'j' || 
-        tmp->hostname[1] != 'c' ||
-        tmp->hostname[2] != 'o' ||
-        tmp->hostname[3] != 'd' ||
-        tmp->hostname[4] != 'e' ||
-        tmp->hostname[5] != '-') {
-        return 0;
-    }
+    // if (tmp->hostname[0] != 'j' || 
+    //     tmp->hostname[1] != 'c' ||
+    //     tmp->hostname[2] != 'o' ||
+    //     tmp->hostname[3] != 'd' ||
+    //     tmp->hostname[4] != 'e' ||
+    //     tmp->hostname[5] != '-') {
+    //     return 0;
+    // }
     // 위처럼 bpf 안전하게 호스트네임이 3e32e83인지 확인
     // if (tmp->hostname[0] != '3' ||
     //     tmp->hostname[1] != 'e' ||
