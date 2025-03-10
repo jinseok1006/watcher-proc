@@ -1,7 +1,6 @@
 from typing import Dict, Any, List, Set
 import os
 import logging
-import re
 
 class Settings:
     """애플리케이션 설정
@@ -37,18 +36,6 @@ class Settings:
             'WATCH_NAMESPACES',
             'jcode-os-1,watcher'
         ).split(',')
-        
-        # 과제 경로 패턴 설정
-        self.homework_path_pattern: str = os.getenv(
-            'HOMEWORK_PATH_PATTERN',
-            r'^/[a-z]+-\d+-\d+/hw\d+(?:/.*)?$'
-        )
-        
-        # 과제 경로 패턴 유효성 검사
-        try:
-            re.compile(self.homework_path_pattern)
-        except re.error as e:
-            raise ValueError(f"Invalid HOMEWORK_PATH_PATTERN: {e}")
     
     @property
     def log_level_enum(self) -> int:
@@ -68,8 +55,7 @@ class Settings:
             'log_level': self.log_level,
             'log_format': self.log_format,
             'watch_namespaces': self.watch_namespaces,
-            'project_root': self.project_root,
-            'homework_path_pattern': self.homework_path_pattern
+            'project_root': self.project_root
         }
     
     def __str__(self) -> str:
