@@ -2,3 +2,4 @@ __pycache__
 test.log
 log_audit.py
 *.tar
+venv

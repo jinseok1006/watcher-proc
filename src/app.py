@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 # 상수 정의
-CONTAINER_ID_LEN = 12
+UTS_LEN = 65
 MAX_PATH_LEN = 256
 ARGSIZE = 384
 
@@ -18,7 +18,7 @@ class ProcessEvent(ctypes.Structure):
     _fields_ = [
         ("pid", ctypes.c_uint32),
         ("error_flags", ctypes.c_uint32),
-        ("container_id", ctypes.c_char * CONTAINER_ID_LEN),
+        ("hostname", ctypes.c_char * UTS_LEN),
         ("binary_path", ctypes.c_ubyte * MAX_PATH_LEN),
         ("fullpath", ctypes.c_ubyte * MAX_PATH_LEN),
         ("args", ctypes.c_ubyte * ARGSIZE),
@@ -59,7 +59,6 @@ class BPFCollector:
             # 핸들러 순서 수정
             handlers = [
                 self.bpf.load_func("init_handler", BPF.TRACEPOINT),
-                self.bpf.load_func("container_handler", BPF.TRACEPOINT),
                 self.bpf.load_func("binary_handler", BPF.TRACEPOINT),
                 self.bpf.load_func("cwd_handler", BPF.TRACEPOINT),
                 self.bpf.load_func("args_handler", BPF.TRACEPOINT)
@@ -123,10 +122,6 @@ class AsyncEventProcessor:
         binary_path_bytes = bytes(event.binary_path[event.binary_path_offset:]).strip(b'\0')
         binary_path = binary_path_bytes.decode('utf-8', errors='replace')
         
-        # gcc-13 실행만 필터링
-        if binary_path != '/usr/bin/x86_64-linux-gnu-gcc-13':
-            return None
-            
         fullpath_bytes = bytes(event.fullpath[event.path_offset:]).strip(b'\0')
         args_bytes = bytes(event.args[:event.args_len])
         args_list = args_bytes.split(b'\0')
@@ -136,7 +131,7 @@ class AsyncEventProcessor:
             'timestamp': datetime.now().isoformat(),
             'pid': event.pid,
             'error_flags': bin(event.error_flags),
-            'container_id': event.container_id.decode(),
+            'hostname': event.hostname.decode(),
             'binary_path': binary_path,
             'cwd': fullpath_bytes.decode('utf-8', errors='replace'),
             'args': args_str,
@@ -149,7 +144,7 @@ class AsyncEventProcessor:
             try:
                 data, size = await self.event_queue.get()
                 event_data = await self.process_event(data, size)
-                if event_data:  # None이 아닐 때만 로깅
+                if event_data:
                     self.logger.info(f"Process Event: {event_data}")
                 self.event_queue.task_done()
             except asyncio.CancelledError:
