@@ -18,6 +18,13 @@ spec:
       - name: watcher-proc
         image: watcher-proc:latest
         imagePullPolicy: IfNotPresent  # 로컬 이미지 사용
+        env:
+        - name: API_ENDPOINT
+          value: "http://jcode-api.jcode-system.svc.cluster.local"  # API 서비스 엔드포인트
+        - name: WATCH_NAMESPACES
+          value: "jcode-os-1,jcode-ai-4,jcode-os-5"
+        - name: LOG_LEVEL
+          value: "INFO"  # 로그 레벨 설정
         securityContext:
           capabilities:
             drop: ["ALL"]
