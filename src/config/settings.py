@@ -36,6 +36,10 @@ class Settings:
             'WATCH_NAMESPACES',
             'jcode-os-1,watcher'
         ).split(',')
+        
+        # API 설정
+        self.api_endpoint = os.getenv('API_ENDPOINT', 'http://localhost:8000')
+        self.api_timeout = float(os.getenv('API_TIMEOUT', '5.0'))  # 5초 기본값
     
     @property
     def log_level_enum(self) -> int:
@@ -55,7 +59,9 @@ class Settings:
             'log_level': self.log_level,
             'log_format': self.log_format,
             'watch_namespaces': self.watch_namespaces,
-            'project_root': self.project_root
+            'project_root': self.project_root,
+            'api_endpoint': self.api_endpoint,
+            'api_timeout': self.api_timeout
         }
     
     def __str__(self) -> str:

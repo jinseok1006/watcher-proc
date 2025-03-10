@@ -1,7 +1,6 @@
 import logging
 import asyncio
 import ctypes
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, Optional, Any
 from ..process.types import ProcessType
@@ -9,42 +8,8 @@ from ..process.filter import ProcessFilter
 from ..parser.base import Parser, CommandResult
 from ..homework.base import HomeworkChecker
 from ..bpf.event import ProcessEvent, ProcessEventData
-
-
-@dataclass
-class EnrichedProcessEvent:
-    """확장된 프로세스 이벤트 데이터"""
-    # BPF 이벤트 필드들
-    timestamp: str
-    pid: int
-    process_type: ProcessType
-    binary_path: str
-    container_id: str
-    cwd: str
-    args: str
-    error_flags: str
-    exit_code: int
-    
-    # 쿠버네티스 관련 확장 필드들
-    pod_name: str
-    namespace: str
-    class_div: str  # e.g. "os-1"
-    student_id: str  # e.g. "202012180"
-    
-    @classmethod
-    def from_bpf_event(cls, bpf_event: ProcessEventData, **extra_fields) -> 'EnrichedProcessEvent':
-        return cls(
-            timestamp=bpf_event.timestamp,
-            pid=bpf_event.pid,
-            process_type=bpf_event.process_type,
-            binary_path=bpf_event.binary_path,
-            container_id=bpf_event.container_id,
-            cwd=bpf_event.cwd,
-            args=bpf_event.args,
-            error_flags=bpf_event.error_flags,
-            exit_code=bpf_event.exit_code,
-            **extra_fields
-        )
+from ..api.client import APIClient
+from ..types.events import EnrichedProcessEvent
 
 
 class AsyncEventProcessor:
@@ -53,14 +18,15 @@ class AsyncEventProcessor:
                  event_queue: asyncio.Queue,
                  parser_registry: Dict[ProcessType, Parser],
                  homework_checker: HomeworkChecker,
-                 container_repository: 'ContainerHashRepository'):  # 타입 힌트는 문자열로
+                 container_repository: 'ContainerHashRepository'):
         self.event_queue = event_queue
         self.logger = logging.getLogger(__name__)
         self._running = True
         self.hw_checker = homework_checker
-        self.process_filter = ProcessFilter(homework_checker)  # homework_checker 전달
+        self.process_filter = ProcessFilter(homework_checker)
         self.parsers = parser_registry
-        self.container_repository = container_repository  # 컨테이너 저장소 참조 저장
+        self.container_repository = container_repository
+        self.api_client = APIClient()
         self.logger.info("[초기화] AsyncEventProcessor 초기화 완료")
 
     async def prepare_event(self, data: Any, size: int) -> ProcessEventData:
@@ -143,20 +109,26 @@ class AsyncEventProcessor:
         if event.process_type == ProcessType.USER_BINARY:
             try:
                 hw_dir = self.hw_checker.get_homework_info(event.binary_path)
-                if hw_dir:  # hw1과 같은 형태
+                if hw_dir:
                     self.logger.info(
                         f"[API 발송 준비] 바이너리 실행: "
                         f"과제={hw_dir}, "
                         f"학번={event.student_id}, "
                         f"분반={event.class_div}, "
                         f"파드={event.pod_name}, "
+                        f"컨테이너={event.container_id}, "
+                        f"PID={event.pid}, "
                         f"실행 파일={event.binary_path}, "
                         f"작업 디렉토리={event.cwd}, "
                         f"명령줄={event.args}, "
                         f"종료 코드={event.exit_code}, "
+                        f"에러 플래그={event.error_flags}, "
                         f"타임스탬프={event.timestamp}"
                     )
-                    # TODO: API 호출
+                    if await self.api_client.send_binary_execution(event, hw_dir):
+                        self.logger.info("[완료] 바이너리 실행 이벤트 전송")
+                    else:
+                        self.logger.error("[실패] 바이너리 실행 이벤트 전송")
                 else:
                     self.logger.debug(f"[무시] 과제 디렉토리 외 실행 파일: {event.binary_path}")
             except Exception as e:
@@ -180,13 +152,20 @@ class AsyncEventProcessor:
                     f"학번={event.student_id}, "
                     f"분반={event.class_div}, "
                     f"파드={event.pod_name}, "
+                    f"컨테이너={event.container_id}, "
+                    f"PID={event.pid}, "
                     f"소스={source_file}, "
                     f"컴파일러={event.binary_path}, "
                     f"작업 디렉토리={event.cwd}, "
                     f"명령줄={event.args}, "
+                    f"종료 코드={event.exit_code}, "
+                    f"에러 플래그={event.error_flags}, "
                     f"타임스탬프={event.timestamp}"
                 )
-                # TODO: API 호출
+                if await self.api_client.send_compilation(event, hw_dir, source_file):
+                    self.logger.info("[완료] 컴파일 이벤트 전송")
+                else:
+                    self.logger.error("[실패] 컴파일 이벤트 전송")
             else:
                 self.logger.debug(f"[무시] 과제 외 파일: {source_file}")
 
