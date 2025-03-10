@@ -8,75 +8,97 @@ from ..homework.base import HomeworkChecker
 from ..process.types import ProcessType
 from ..parser.base import Parser
 from ..parser.compiler import CCompilerParser
+from ..utils.logging import get_logger
 
 class HomeworkHandler(EventHandler[EventBuilder, EventBuilder]):
     """과제 정보 처리 핸들러
     
     실행된 프로세스가 과제와 관련된 경우 과제 정보를 추가합니다.
+    1. 유저 바이너리인 경우: 실행 파일이 과제 디렉토리 내에 있는지 확인
+    2. 컴파일러 프로세스인 경우: 명령어에서 소스 파일을 추출하고 과제 디렉토리 확인
     """
     
     def __init__(self, homework_checker: HomeworkChecker):
-        """초기화
-        
-        Args:
-            homework_checker: 과제 체커
+        self.logger = get_logger(__name__)
+        self.hw_checker = homework_checker
+        self.gcc_parser = CCompilerParser(ProcessType.GCC)
+        self.clang_parser = CCompilerParser(ProcessType.CLANG)
+    
+    def _get_parser(self, process_type: ProcessType) -> Optional[CCompilerParser]:
+        """프로세스 타입에 맞는 파서를 반환합니다."""
+        if process_type == ProcessType.GCC:
+            return self.gcc_parser
+        elif process_type == ProcessType.CLANG:
+            return self.clang_parser
+        return None
+    
+    async def _handle_user_binary(self, builder: EventBuilder) -> Optional[EventBuilder]:
+        """유저 바이너리 실행을 처리합니다."""
+        try:
+            hw_dir = self.hw_checker.get_homework_info(builder.base.binary_path)
+            if hw_dir:
+                builder.homework = HomeworkInfo(homework_dir=hw_dir, source_file=builder.base.binary_path)
+                self.logger.info(f"과제 정보 설정 - 바이너리 실행: {builder.base.binary_path}, 과제: {hw_dir}")
+            else:
+                self.logger.debug(f"무시 - 과제 디렉토리 외 실행 파일: {builder.base.binary_path}")
+            return await self._handle_next(builder)
+        except Exception as e:
+            self.logger.error(f"과제 실행 파일 처리 오류 - {str(e)}, 경로: {builder.base.binary_path}")
+            return None
+
+    async def _handle_compiler(self, builder: EventBuilder, parser: CCompilerParser) -> Optional[EventBuilder]:
+        """컴파일러 실행을 처리합니다."""
+        try:
+            self.logger.debug(f"컴파일러 감지 - 타입: {builder.process.type}, 명령어: {builder.base.args}")
             
-        Note:
-            과제 디렉토리는 정확한 매칭을 위해 절대 경로로 변환됩니다.
-        """
-        super().__init__()
-        self.homework_checker = homework_checker
-        # 컴파일러별 파서 초기화
-        self.parsers: Dict[ProcessType, Parser] = {
-            ProcessType.GCC: CCompilerParser(ProcessType.GCC),
-            ProcessType.CLANG: CCompilerParser(ProcessType.CLANG)
-        }
+            result = parser.parse(builder.base.args, builder.base.cwd)
+            if not result.source_files:
+                self.logger.debug(
+                    f"소스 파일 없음 - "
+                    f"컴파일러: {builder.base.binary_path}, "
+                    f"작업 디렉토리: {builder.base.cwd}, "
+                    f"명령어: {builder.base.args}"
+                )
+                return None  # 소스 파일이 없으면 과제 관련 이벤트가 아님
+            
+            self.logger.debug(f"소스 파일 발견 - 개수: {len(result.source_files)}")
+            
+            source_file = result.source_files[0]
+            hw_dir = self.hw_checker.get_homework_info(source_file)
+            if hw_dir:
+                self.logger.info(f"과제 정보 설정 - 컴파일: {source_file}, 과제: {hw_dir}")
+                builder.homework = HomeworkInfo(homework_dir=hw_dir, source_file=source_file)
+                return await self._handle_next(builder)
+            else:
+                self.logger.debug(f"과제 외 소스 파일 - 파일: {source_file}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"컴파일 처리 오류 - {str(e)}")
+            return None
     
     async def handle(self, builder: EventBuilder) -> Optional[EventBuilder]:
-        """이벤트 처리
+        """이벤트를 처리합니다.
         
-        Args:
-            builder: 이벤트 빌더
-            
-        Returns:
-            처리된 이벤트 빌더 또는 None
+        프로세스 타입에 따라 다른 처리를 수행합니다:
+        - USER_BINARY: 실행 파일이 과제 디렉토리 내에 있는지 확인
+        - GCC/CLANG: 소스 파일을 추출하고 과제 디렉토리 확인
         """
+        self.logger.info(f"시작 - 프로세스 타입: {builder.process.type}")
+        
         try:
-            self.logger.info(f"[HomeworkHandler] 과제 정보 처리 시작 - PID: {builder.base.pid}")
-            
-            # 과제 디렉토리 확인
-            homework_dir = self.homework_checker.get_homework_info(builder.base.binary_path)
-            if not homework_dir:
-                self.logger.info(f"[HomeworkHandler] 과제 디렉토리 아님 - PID: {builder.base.pid}, 경로: {builder.base.binary_path}")
-                return await self._handle_next(builder)
+            if builder.process.type == ProcessType.USER_BINARY:
+                self.logger.info("유저 바이너리 처리 시작")
+                return await self._handle_user_binary(builder)
                 
-            # 컴파일러인 경우 소스 파일 파싱
-            source_file = None
-            if builder.process and builder.process.type in (ProcessType.GCC, ProcessType.CLANG):
-                try:
-                    args = builder.base.args.split()
-                    for arg in reversed(args):
-                        if arg.endswith('.c'):
-                            source_file = os.path.basename(arg)
-                            break
-                except Exception as e:
-                    self.logger.error(f"[HomeworkHandler] 소스 파일 파싱 실패 - PID: {builder.base.pid}, 오류: {str(e)}")
+            parser = self._get_parser(builder.process.type)
+            if parser:
+                self.logger.info("컴파일러 처리 시작")
+                return await self._handle_compiler(builder, parser)
             
-            # 과제 정보 설정
-            builder.homework = HomeworkInfo(
-                homework_dir=homework_dir,
-                source_file=source_file
-            )
-            
-            self.logger.info(
-                f"[HomeworkHandler] 과제 정보 처리 완료 - "
-                f"PID: {builder.base.pid}, "
-                f"과제 디렉토리: {homework_dir}, "
-                f"소스 파일: {source_file or '없음'}"
-            )
-            
+            self.logger.info(f"처리하지 않는 프로세스 타입: {builder.process.type}")
             return await self._handle_next(builder)
             
         except Exception as e:
-            self.logger.error(f"[HomeworkHandler] 과제 정보 처리 실패 - PID: {builder.base.pid}, 오류: {str(e)}")
-            raise 
+            self.logger.error(f"오류 - 상세 정보: {str(e)}", exc_info=True)
+            return await self._handle_next(builder)  # 오류 발생해도 체인 계속 진행 

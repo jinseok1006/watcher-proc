@@ -126,14 +126,14 @@ int init_handler(struct pt_regs *ctx) {
 
 
     // jcode- 접두어 확인
-    // if (tmp->hostname[0] != 'j' || 
-    //     tmp->hostname[1] != 'c' ||
-    //     tmp->hostname[2] != 'o' ||
-    //     tmp->hostname[3] != 'd' ||
-    //     tmp->hostname[4] != 'e' ||
-    //     tmp->hostname[5] != '-') {
-    //     return 0;
-    // }
+    if (tmp->hostname[0] != 'j' || 
+        tmp->hostname[1] != 'c' ||
+        tmp->hostname[2] != 'o' ||
+        tmp->hostname[3] != 'd' ||
+        tmp->hostname[4] != 'e' ||
+        tmp->hostname[5] != '-') {
+        return 0;
+    }
     
     // 모든 검증을 통과한 경우에만 맵에 등록
     process_data.update(&pid, tmp);

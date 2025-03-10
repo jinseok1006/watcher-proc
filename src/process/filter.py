@@ -1,18 +1,18 @@
-import logging
 from typing import Dict, List
 from .types import ProcessType
 from ..config.settings import settings
 from ..homework.base import HomeworkChecker
+from ..utils.logging import get_logger
 
 class ProcessFilter:
     """프로세스 타입 결정"""
     def __init__(self, homework_checker: HomeworkChecker):
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
         self.patterns: Dict[ProcessType, List[str]] = {
             ProcessType[k]: v for k, v in settings.PROCESS_PATTERNS.items()
         }
         self.hw_checker = homework_checker
-        self.logger.info(f"[초기화] 프로세스 패턴: {self.patterns}")
+        self.logger.info(f"[ProcessFilter] 초기화 완료 - 패턴: {self.patterns}")
 
     def get_process_type(self, binary_path: str, container_id: str = "") -> ProcessType:
         """실행된 프로세스의 타입을 결정
@@ -42,7 +42,8 @@ class ProcessFilter:
             for proc_type, patterns in self.patterns.items():
                 if any(pattern in binary_path for pattern in patterns):
                     self.logger.info(
-                        f"[감지] 시스템 프로세스: {proc_type.name}, "
+                        f"[ProcessFilter] 시스템 프로세스 감지 - "
+                        f"타입: {proc_type.name}, "
                         f"경로: {binary_path}"
                     )
                     return proc_type
@@ -50,16 +51,16 @@ class ProcessFilter:
             # 2. 과제 디렉토리 내 실행 파일 체크
             if hw_dir := self.hw_checker.get_homework_info(binary_path):
                 self.logger.info(
-                    f"[감지] 과제 실행 파일: "
+                    f"[ProcessFilter] 과제 실행 파일 감지 - "
                     f"경로: {binary_path}, "
                     f"과제: {hw_dir}"
                 )
                 return ProcessType.USER_BINARY
 
             # 3. 그 외는 무시
-            self.logger.debug(f"[스킵] 무시된 프로세스: {binary_path}")
+            self.logger.debug(f"[ProcessFilter] 무시된 프로세스 - 경로: {binary_path}")
             return ProcessType.UNKNOWN
             
         except Exception as e:
-            self.logger.error(f"[오류] 프로세스 타입 결정 실패: {binary_path}, {str(e)}")
+            self.logger.error(f"[ProcessFilter] 프로세스 타입 결정 실패 - 경로: {binary_path}, 오류: {str(e)}")
             return ProcessType.UNKNOWN 

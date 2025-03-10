@@ -2,7 +2,7 @@ from typing import Optional
 
 from .base import EventHandler
 from ..api.client import APIClient
-from ..events.models import EventBuilder
+from ..events.models import EventBuilder, Event
 from ..process.types import ProcessType
 
 class APIHandler(EventHandler[EventBuilder, EventBuilder]):
@@ -25,44 +25,25 @@ class APIHandler(EventHandler[EventBuilder, EventBuilder]):
             
         Returns:
             EventBuilder 또는 None (API 전송 실패 시)
-            
-        Note:
-            이벤트 타입에 따라 다른 엔드포인트로 전송:
-            - 컴파일 이벤트: /api/:class_div/:hw_name/:student_id/logs/build
-            - 실행 이벤트: /api/:class_div/:hw_name/:student_id/logs/run
         """
         try:
             # 필수 정보 검증
             if not builder.metadata or not builder.homework:
-                self.logger.error("[전송 실패] 메타데이터 또는 과제 정보 누락")
+                self.logger.error("전송 실패 - 메타데이터 또는 과제 정보 누락")
                 return None
                 
-            # 이벤트 전송
-            success = False
+            # 이벤트 생성
+            event = builder.build()
             
-            if builder.process.type in (ProcessType.GCC, ProcessType.CLANG):
-                if not builder.homework.source_file:
-                    self.logger.error("[전송 실패] 컴파일 이벤트에 소스 파일 정보 누락")
-                    return None
-                    
-                success = await self.client.send_compilation(
-                    event=builder.build(),
-                    hw_dir=builder.homework.homework_dir,
-                    source_file=builder.homework.source_file
-                )
-                
-            else:  # 실행 이벤트
-                success = await self.client.send_binary_execution(
-                    event=builder.build(),
-                    hw_dir=builder.homework.homework_dir
-                )
+            # 이벤트 타입에 따라 전송
+            if event.is_compilation:
+                success = await self.client.send_compilation(event)
+            else:
+                success = await self.client.send_binary_execution(event)
             
-            if not success:
-                self.logger.error("[전송 실패] API 서버 응답 오류")
-                return None
-                
-            return await self._handle_next(builder)
+            # API 전송 성공 시 빌더 반환
+            return builder if success else None
             
         except Exception as e:
-            self.logger.error(f"[전송 실패] API 이벤트 처리 오류: {str(e)}")
+            self.logger.error(f"전송 실패 - API 이벤트 처리 오류: {str(e)}")
             return None 

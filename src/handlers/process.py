@@ -4,6 +4,7 @@ from .base import EventHandler
 from ..events.models import EventBuilder, ProcessTypeInfo
 from ..process.filter import ProcessFilter
 from ..process.types import ProcessType
+from ..utils.logging import get_logger
 
 class ProcessTypeHandler(EventHandler[EventBuilder, EventBuilder]):
     """프로세스 타입 감지 핸들러
@@ -18,6 +19,7 @@ class ProcessTypeHandler(EventHandler[EventBuilder, EventBuilder]):
             process_filter: 프로세스 타입 결정을 위한 필터
         """
         super().__init__()
+        self.logger = get_logger(__name__)
         self.process_filter = process_filter
     
     async def handle(self, builder: EventBuilder) -> Optional[EventBuilder]:
@@ -30,20 +32,20 @@ class ProcessTypeHandler(EventHandler[EventBuilder, EventBuilder]):
             처리된 이벤트 빌더 또는 None
         """
         try:
-            self.logger.info(f"[ProcessTypeHandler] 프로세스 타입 감지 시작 - PID: {builder.base.pid}")
+            self.logger.debug("프로세스 타입 감지 시작")
             
             # 프로세스 타입 감지
             process_type = self.process_filter.get_process_type(builder.base.binary_path)
             if process_type == ProcessType.UNKNOWN:
-                self.logger.info(f"[ProcessTypeHandler] 알 수 없는 프로세스 타입 - PID: {builder.base.pid}, 실행 파일: {builder.base.binary_path}")
+                self.logger.debug(f"알 수 없는 프로세스 타입 - 실행 파일: {builder.base.binary_path}")
                 return None
                 
             # 프로세스 정보 설정
             builder.process = ProcessTypeInfo(type=process_type)
-            self.logger.info(f"[ProcessTypeHandler] 프로세스 타입 감지 완료 - PID: {builder.base.pid}, 타입: {process_type.name}")
+            self.logger.info(f"프로세스 타입 감지 완료 - 타입: {process_type}")
             
             return await self._handle_next(builder)
             
         except Exception as e:
-            self.logger.error(f"[ProcessTypeHandler] 프로세스 타입 감지 실패 - PID: {builder.base.pid}, 오류: {str(e)}")
+            self.logger.error(f"프로세스 타입 감지 실패 - 오류: {str(e)}")
             raise 
