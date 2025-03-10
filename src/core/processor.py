@@ -143,6 +143,10 @@ class AsyncEventProcessor:
             
         cmd = parser.parse(event.args, event.cwd)
         
+        if not cmd.source_files:
+            self.logger.info(f"[처리 종료] 소스 파일이 없어 컴파일 이벤트 처리 종료")
+            return
+        
         for source_file in cmd.source_files:
             hw_dir = self.hw_checker.get_homework_info(source_file)
             if hw_dir:
