@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import ctypes
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional, Any
 from ..process.types import ProcessType
 from ..process.filter import ProcessFilter
@@ -42,7 +42,7 @@ class AsyncEventProcessor:
         )
         
         event_data = ProcessEventData(
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             pid=event.pid,
             process_type=process_type,
             binary_path=binary_path,
