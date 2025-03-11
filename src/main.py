@@ -57,13 +57,11 @@ async def process_events(event_queue: asyncio.Queue, handler_chain):
         handler_chain: 이벤트 처리 핸들러 체인
     """
     logger.info("[이벤트 처리] 이벤트 처리 루프 시작")
-    event_count = 0
     
     while True:
         try:
             event = await event_queue.get()
-            event_count += 1
-            logger.debug(f"[이벤트 처리] 큐에서 이벤트 수신 (총 처리 이벤트: {event_count}개)")
+            logger.debug(f"[이벤트 처리] 큐에서 이벤트 수신")
             
             # 이벤트 처리를 기다리지 않고 바로 다음 이벤트 처리
             asyncio.create_task(handle_event(event, handler_chain))

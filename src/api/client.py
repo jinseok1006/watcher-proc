@@ -14,19 +14,19 @@ class APIClient:
         """이벤트 전송 공통 로직"""
         try:
             # 개발 환경에서는 실제 요청을 보내지 않고 로깅만 수행
-            # async with aiohttp.ClientSession() as session:
-            #     async with session.post(
-            #         f'{self.base_url}{endpoint}',
-            #         json=data,
-            #         timeout=settings.api_timeout
-            #     ) as response:
-            #         if response.status >= 400:
-            #             error_text = await response.text()
-            #             self.logger.error(f"API 요청 실패: status={response.status}, response={error_text}")
-            #             return False
-            #         return True
-            self.logger.info(f"API 요청 - endpoint: {endpoint}, data: {data}")
-            return True
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f'{self.base_url}{endpoint}',
+                    json=data,
+                    timeout=settings.api_timeout
+                ) as response:
+                    if response.status >= 400:
+                        error_text = await response.text()
+                        self.logger.error(f"API 요청 실패: status={response.status}, response={error_text}")
+                        return False
+                    return True
+            # self.logger.info(f"API 요청 - endpoint: {endpoint}, data: {data}")
+            # return True
                     
         except Exception as e:
             self.logger.error(f"API 예상치 못한 오류: {str(e)}")

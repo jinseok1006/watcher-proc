@@ -6,25 +6,35 @@ from unittest.mock import patch, MagicMock
 from aiohttp import web
 from src.api.client import APIClient
 from src.process.types import ProcessType
-from src.types.events import EnrichedProcessEvent
+from src.events.models import Event, ProcessTypeInfo, EventMetadata, HomeworkInfo
+from src.bpf.event import RawBpfEvent
 
 # 테스트용 이벤트 데이터
 @pytest.fixture
 def sample_event():
-    return EnrichedProcessEvent(
-        timestamp=datetime.now().isoformat(),
-        pid=12345,
-        process_type=ProcessType.USER_BINARY,
-        binary_path="/home/coder/project/hw1/main",
-        container_id="container123",
-        cwd="/home/coder/project/hw1",
-        args="./main arg1 arg2",
-        error_flags="0b0",
-        exit_code=0,
-        pod_name="jcode-os-1-202012345-abc",
-        namespace="jcode-os-1",
-        class_div="os-1",
-        student_id="202012345"
+    current_time = datetime.now()
+    return Event(
+        base=RawBpfEvent(
+            pid=12345,
+            binary_path="/home/coder/project/hw1/main",
+            cwd="/home/coder/project/hw1",
+            args="./main arg1 arg2",
+            error_flags="0b0",
+            exit_code=0,
+            hostname="jcode-os-1-202012345-abc"
+        ),
+        process=ProcessTypeInfo(
+            type=ProcessType.USER_BINARY
+        ),
+        metadata=EventMetadata(
+            timestamp=current_time,
+            class_div="os-1",
+            student_id="202012345"
+        ),
+        homework=HomeworkInfo(
+            homework_dir="hw1",
+            source_file="/home/coder/project/hw1/main"
+        )
     )
 
 @pytest.fixture
@@ -45,15 +55,11 @@ async def test_send_binary_execution_success(aiohttp_client, sample_event):
         
         # 요청 바디 검증
         data = await request.json()
-        assert data['pod_name'] == sample_event.pod_name
-        assert data['container_id'] == sample_event.container_id
-        assert data['pid'] == sample_event.pid
-        assert data['binary_path'] == sample_event.binary_path
-        assert data['working_dir'] == sample_event.cwd
-        assert data['command_line'] == sample_event.args
-        assert data['exit_code'] == sample_event.exit_code
-        assert data['error_flags'] == sample_event.error_flags
-        assert data['timestamp'] == sample_event.timestamp
+        assert data['timestamp'] == sample_event.metadata.timestamp.isoformat()
+        assert data['exit_code'] == sample_event.base.exit_code
+        assert data['cmdline'] == sample_event.base.args
+        assert data['cwd'] == sample_event.base.cwd
+        assert data['binary_path'] == sample_event.base.binary_path
         
         return web.json_response({"status": "success"})
 
@@ -69,7 +75,7 @@ async def test_send_binary_execution_success(aiohttp_client, sample_event):
         api_client = APIClient()
         
         # 테스트 실행
-        result = await api_client.send_binary_execution(sample_event, "hw1")
+        result = await api_client.send_binary_execution(sample_event)
         assert result is True
 
 async def test_send_compilation_success(aiohttp_client, sample_event):
@@ -82,16 +88,11 @@ async def test_send_compilation_success(aiohttp_client, sample_event):
         
         # 요청 바디 검증
         data = await request.json()
-        assert data['pod_name'] == sample_event.pod_name
-        assert data['container_id'] == sample_event.container_id
-        assert data['pid'] == sample_event.pid
-        assert data['compiler_path'] == sample_event.binary_path
-        assert data['working_dir'] == sample_event.cwd
-        assert data['command_line'] == sample_event.args
-        assert data['exit_code'] == sample_event.exit_code
-        assert data['error_flags'] == sample_event.error_flags
-        assert data['timestamp'] == sample_event.timestamp
-        assert data['source_file'] == '/home/coder/project/hw1/main.c'
+        assert data['timestamp'] == sample_event.metadata.timestamp.isoformat()
+        assert data['exit_code'] == sample_event.base.exit_code
+        assert data['cmdline'] == sample_event.base.args
+        assert data['cwd'] == sample_event.base.cwd
+        assert data['binary_path'] == sample_event.base.binary_path
         
         return web.json_response({"status": "success"})
 
@@ -107,11 +108,7 @@ async def test_send_compilation_success(aiohttp_client, sample_event):
         api_client = APIClient()
         
         # 테스트 실행
-        result = await api_client.send_compilation(
-            sample_event, 
-            "hw1",
-            "/home/coder/project/hw1/main.c"
-        )
+        result = await api_client.send_compilation(sample_event)
         assert result is True
 
 async def test_api_error_handling(aiohttp_client, sample_event):
@@ -132,7 +129,7 @@ async def test_api_error_handling(aiohttp_client, sample_event):
         api_client = APIClient()
         
         # 테스트 실행
-        result = await api_client.send_binary_execution(sample_event, "hw1")
+        result = await api_client.send_binary_execution(sample_event)
         assert result is False
 
 async def test_network_error_handling(api_client, sample_event):
@@ -143,7 +140,7 @@ async def test_network_error_handling(api_client, sample_event):
         api_client = APIClient()
         
         # 테스트 실행
-        result = await api_client.send_binary_execution(sample_event, "hw1")
+        result = await api_client.send_binary_execution(sample_event)
         assert result is False
 
 async def test_timeout_handling(aiohttp_client, sample_event):
@@ -164,5 +161,5 @@ async def test_timeout_handling(aiohttp_client, sample_event):
         api_client = APIClient()
         
         # 테스트 실행
-        result = await api_client.send_binary_execution(sample_event, "hw1")
+        result = await api_client.send_binary_execution(sample_event)
         assert result is False 

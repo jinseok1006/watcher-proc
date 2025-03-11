@@ -46,27 +46,27 @@ class HomeworkHandler(EventHandler[EventBuilder, EventBuilder]):
             self.logger.error(f"과제 실행 파일 처리 오류 - {str(e)}, 경로: {builder.base.binary_path}")
             return None
 
-    async def _handle_compiler(self, builder: EventBuilder, parser: CCompilerParser) -> Optional[EventBuilder]:
-        """컴파일러 실행을 처리합니다."""
+    async def _handle_source_file(self, builder: EventBuilder, parser: Parser) -> Optional[EventBuilder]:
+        """소스 파일을 파싱하고 과제 관련 여부를 확인합니다."""
         try:
-            self.logger.debug(f"컴파일러 감지 - 타입: {builder.process.type}, 명령어: {builder.base.args}")
+            self.logger.debug(f"소스 파일 처리 시작 - 타입: {builder.process.type}, 명령어: {builder.base.args}")
             
             result = parser.parse(builder.base.args, builder.base.cwd)
             if not result.source_files:
                 self.logger.debug(
                     f"소스 파일 없음 - "
-                    f"컴파일러: {builder.base.binary_path}, "
+                    f"실행 파일: {builder.base.binary_path}, "
                     f"작업 디렉토리: {builder.base.cwd}, "
                     f"명령어: {builder.base.args}"
                 )
-                return None  # 소스 파일이 없으면 과제 관련 이벤트가 아님
+                return None
             
             self.logger.debug(f"소스 파일 발견 - 개수: {len(result.source_files)}")
             
             source_file = result.source_files[0]
             hw_dir = self.hw_checker.get_homework_info(source_file)
             if hw_dir:
-                self.logger.info(f"과제 정보 설정 - 컴파일: {source_file}, 과제: {hw_dir}")
+                self.logger.info(f"과제 정보 설정 - 실행: {source_file}, 과제: {hw_dir}")
                 builder.homework = HomeworkInfo(homework_dir=hw_dir, source_file=source_file)
                 return await self._handle_next(builder)
             else:
@@ -74,7 +74,7 @@ class HomeworkHandler(EventHandler[EventBuilder, EventBuilder]):
                 return None
                 
         except Exception as e:
-            self.logger.error(f"컴파일 처리 오류 - {str(e)}")
+            self.logger.error(f"소스 파일 처리 오류 - {str(e)}")
             return None
     
     async def handle(self, builder: EventBuilder) -> Optional[EventBuilder]:
@@ -94,7 +94,7 @@ class HomeworkHandler(EventHandler[EventBuilder, EventBuilder]):
             parser = self._get_parser(builder.process.type)
             if parser:
                 self.logger.info("컴파일러 처리 시작")
-                return await self._handle_compiler(builder, parser)
+                return await self._handle_source_file(builder, parser)
             
             self.logger.info(f"처리하지 않는 프로세스 타입: {builder.process.type}")
             return await self._handle_next(builder)
