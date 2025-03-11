@@ -5,7 +5,6 @@ BPF 프로그램을 실행하고 이벤트를 처리하는 메인 로직을 구�
 
 import asyncio
 import logging
-from pathlib import Path
 
 from src.bpf.collector import BPFCollector
 from src.bpf.event import RawBpfEvent
@@ -14,9 +13,10 @@ from src.process.filter import ProcessFilter
 from src.homework.checker import HomeworkChecker
 from src.handlers.chain import build_handler_chain
 from src.utils.logging import get_logger, set_pid, setup_logging
+from src.config.settings import settings
 
 # 로깅 설정
-setup_logging(level=logging.INFO)
+setup_logging(level=getattr(logging, settings.log_level))
 logger = get_logger(__name__)
 
 async def handle_event(event: RawBpfEvent, handler_chain):
