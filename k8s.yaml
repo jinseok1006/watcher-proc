@@ -12,7 +12,6 @@ spec:
       labels:
         app: watcher-proc
     spec:
-      serviceAccountName: watcher-proc-sa  # ServiceAccount 이름 수정
       hostPID: true  # 호스트 PID 네임스페이스 접근
       containers:
       - name: watcher-proc
