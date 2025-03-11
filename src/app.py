@@ -25,7 +25,6 @@ class Application:
         self.event_queue = asyncio.Queue()
         self.collector = None
         self.handler_chain = None
-        self.semaphore = asyncio.Semaphore(settings.max_concurrent_events)
         self.is_running = False
 
     async def handle_event(self, event: RawBpfEvent):
@@ -44,8 +43,7 @@ class Application:
         """이벤트 처리 루프"""
         while self.is_running:
             event = await self.event_queue.get()
-            async with self.semaphore:
-                await self.handle_event(event)
+            await self.handle_event(event)
             self.event_queue.task_done()
 
     async def start(self):

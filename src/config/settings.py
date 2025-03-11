@@ -39,13 +39,10 @@ class Settings:
     def __init__(self):
         # API 설정
         self.api_endpoint = os.getenv("API_ENDPOINT", "http://localhost:8000")
-        self.api_timeout = int(os.getenv("API_TIMEOUT", "10"))  # 기본 5초 타임아웃
+        self.api_timeout = int(os.getenv("API_TIMEOUT", "10"))
 
         # 로깅 설정
         self.log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-
-        # 동시성 설정
-        self.max_concurrent_events = int(os.getenv("MAX_CONCURRENT_EVENTS", "500"))
 
 
 # 싱글톤 인스턴스 생성
