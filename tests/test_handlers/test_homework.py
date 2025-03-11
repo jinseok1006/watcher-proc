@@ -82,6 +82,31 @@ def binary_builder(binary_event):
     )
     return builder
 
+@pytest.fixture
+def python_event():
+    """Python 실행 이벤트"""
+    return RawBpfEvent(
+        hostname="jcode-os-1-202012180-hash",
+        pid=1234,
+        binary_path="/usr/bin/python3",
+        cwd="/home/student/hw1",
+        args="python3 solution.py",
+        error_flags="0",
+        exit_code=0
+    )
+
+@pytest.fixture
+def python_builder(python_event):
+    """Python 이벤트에 대한 EventBuilder를 생성합니다."""
+    builder = EventBuilder(python_event)
+    builder.process = ProcessTypeInfo(type=ProcessType.PYTHON)
+    builder.metadata = EventMetadata(
+        timestamp=datetime.now(timezone.utc),
+        class_div="os-1",
+        student_id="202012180"
+    )
+    return builder
+
 @pytest.mark.asyncio
 async def test_handle_compilation_in_homework_dir(handler, compiler_builder):
     """과제 디렉토리 내에서의 컴파일 이벤트 처리를 테스트합니다."""
@@ -168,4 +193,18 @@ async def test_handle_non_compilation_in_homework_dir(handler, compiler_builder)
     assert result.homework is not None  # 과제 디렉토리는 설정되어야 함
     assert result.homework.homework_dir == "/home/student/hw1"
     assert result.homework.source_file == "/home/student/hw1/script.py"  # Python 파일 경로 저장
-    next_handler.handle.assert_awaited_once_with(compiler_builder) 
+    next_handler.handle.assert_awaited_once_with(compiler_builder)
+
+@pytest.mark.asyncio
+async def test_handle_python_in_homework_dir(handler, python_builder):
+    """과제 디렉토리 내에서의 Python 실행을 테스트합니다."""
+    next_handler = Mock()
+    next_handler.handle = AsyncMock(return_value=python_builder)
+    handler.set_next(next_handler)
+    
+    result = await handler.handle(python_builder)
+    
+    assert result == python_builder
+    assert isinstance(result.homework, HomeworkInfo)
+    assert result.homework.homework_dir == "/home/student/hw1"
+    assert result.homework.source_file == "/home/student/hw1/solution.py" 

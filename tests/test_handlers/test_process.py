@@ -204,3 +204,26 @@ async def test_process_handler_error_handling(process_filter, caplog):
     # Then
     assert result is None
     assert "프로세스 타입 감지 실패" in caplog.text  # 실제 로그 메시지와 일치하도록 수정 
+
+@pytest.mark.asyncio
+async def test_process_handler_python_script(process_filter):
+    """Python 스크립트 실행 감지 테스트"""
+    event = EventBuilder(base=RawBpfEvent(
+        hostname="test-host",
+        binary_path="/usr/bin/python3",
+        args="python3 test.py",
+        pid=1234,
+        cwd="/home/test/hw1",
+        error_flags="0",
+        exit_code=0
+    ))
+    handler = ProcessTypeHandler(process_filter)
+    next_handler = Mock()
+    next_handler.handle = AsyncMock(return_value=event)
+    handler.set_next(next_handler)
+    
+    result = await handler.handle(event)
+    
+    assert result is not None
+    assert result.process is not None
+    assert result.process.type == ProcessType.PYTHON 

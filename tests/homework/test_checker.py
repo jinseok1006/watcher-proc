@@ -43,6 +43,10 @@ class TestHomeworkChecker:
             ("/os-1-202012345/hw1/src/test/main", "hw1"),  # 깊은 중첩
             ("/os-1-202012345/hw1/", "hw1"),               # 끝에 슬래시
             ("/os-1-202012345/hw1", "hw1"),                # 디렉토리만
+            
+            # 8. Python 스크립트 경로
+            ("/os-1-202012345/hw1/solution.py", "hw1"),     # 기본 Python 파일
+            ("/home/coder/project/hw2/test.py", "hw2"),     # 프로젝트의 Python 파일
         ]
         
         for path, expected_hw_dir in test_cases:

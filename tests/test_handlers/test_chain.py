@@ -90,6 +90,19 @@ def binary_event():
         exit_code=0
     )
 
+@pytest.fixture
+def python_event():
+    """Python 실행 이벤트"""
+    return RawBpfEvent(
+        hostname="jcode-os-1-202012180-hash",
+        pid=1234,
+        binary_path="/usr/bin/python3",
+        cwd="/home/student/hw1",
+        args="python3 solution.py --test",
+        error_flags="0",
+        exit_code=0
+    )
+
 @pytest.mark.asyncio
 async def test_handle_gcc_compilation(handler_chain, gcc_event):
     """GCC 컴파일 이벤트 처리 테스트"""
@@ -189,3 +202,14 @@ async def test_handle_gcc_compilation_with_logging(handler_chain, gcc_event, cap
     
     # 로그가 비어있지 않은지만 확인
     assert len(caplog.text) > 0
+
+@pytest.mark.asyncio
+async def test_handle_python_execution(handler_chain, python_event):
+    """Python 실행 이벤트 처리 테스트"""
+    builder = EventBuilder(python_event)
+    result = await handler_chain.handle(builder)
+    
+    assert result is not None
+    assert result.process.type == ProcessType.PYTHON
+    assert result.homework.homework_dir == "/home/student/hw1"
+    assert result.homework.source_file == "/home/student/hw1/solution.py"
