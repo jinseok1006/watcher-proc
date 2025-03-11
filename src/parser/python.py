@@ -18,6 +18,7 @@ class PythonParser(Parser):
     def __init__(self, process_type: ProcessType):
         self.logger = get_logger(__name__)
         self.process_type = process_type
+        self.logger.info(f"[PythonParser] {process_type.name} 파서 초기화 완료")
     
     def parse(self, args: str, cwd: str) -> CommandResult:
         """Python 명령어에서 소스 파일 경로를 추출합니다.

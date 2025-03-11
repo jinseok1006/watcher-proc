@@ -18,4 +18,4 @@ RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 COPY src ./src
 
 ENTRYPOINT ["python3"]
-CMD ["-m", "src.main"]
+CMD ["-m", "src.app"]
