@@ -41,7 +41,22 @@ class APIClient:
             'exit_code': event.base.exit_code,
             'cmdline': event.base.args,
             'cwd': event.base.cwd,
-            'binary_path': event.base.binary_path
+            'target_path': event.base.binary_path,
+            'process_type': 'binary'
+        }
+        return await self._send_event(endpoint, data)
+
+    async def send_python_execution(self, event: Event) -> bool:
+        """파이썬 실행 이벤트 전송"""
+        endpoint = f"/api/{event.metadata.class_div}/{event.homework.homework_dir}/{event.metadata.student_id}/logs/run"
+        
+        data = {
+            'timestamp': event.metadata.timestamp.isoformat(),
+            'exit_code': event.base.exit_code,
+            'cmdline': event.base.args,
+            'cwd': event.base.cwd,
+            'target_path': event.homework.source_file,
+            'process_type': 'python'
         }
         return await self._send_event(endpoint, data)
 

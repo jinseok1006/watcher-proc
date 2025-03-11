@@ -38,6 +38,8 @@ class APIHandler(EventHandler[EventBuilder, EventBuilder]):
             # 이벤트 타입에 따라 전송
             if event.is_compilation:
                 success = await self.client.send_compilation(event)
+            elif event.process.type == ProcessType.PYTHON:
+                success = await self.client.send_python_execution(event)
             else:
                 success = await self.client.send_binary_execution(event)
             
