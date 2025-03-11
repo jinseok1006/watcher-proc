@@ -21,8 +21,6 @@ spec:
         env:
         - name: API_ENDPOINT
           value: "http://jcode-api.jcode-system.svc.cluster.local"  # API 서비스 엔드포인트
-        - name: WATCH_NAMESPACES
-          value: "jcode-os-1,jcode-ai-4,jcode-os-5"
         - name: LOG_LEVEL
           value: "INFO"  # 로그 레벨 설정
         securityContext:
@@ -39,11 +37,6 @@ spec:
         - name: kernel-debug
           mountPath: /sys/kernel/debug
           readOnly: true
-        - name: cgroup
-          mountPath: /sys/fs/cgroup
-          readOnly: true
-        - name: proc
-          mountPath: /proc
       volumes:
       - name: kernel-modules
         hostPath:
@@ -57,95 +50,3 @@ spec:
         hostPath:
           path: /sys/kernel/debug
           type: Directory
-      - name: cgroup
-        hostPath:
-          path: /sys/fs/cgroup
-          type: Directory
-      - name: proc
-        hostPath:
-          path: /proc
-          type: Directory
-
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: watcher-proc-sa  # ServiceAccount 이름 수정
-  namespace: watcher
----
-# 테스트 환경용 ClusterRole (모든 네임스페이스 접근)
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: watcher-proc-role  # Role 이름 수정
-rules:
-- apiGroups: [""]
-  resources: ["pods"]
-  verbs: ["get", "list", "watch"]
----
-# 테스트 환경용 ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: watcher-proc-binding  # Binding 이름 수정
-subjects:
-- kind: ServiceAccount
-  name: watcher-proc-sa  # ServiceAccount 참조 수정
-  namespace: watcher
-roleRef:
-  kind: ClusterRole
-  name: watcher-proc-role  # Role 참조 수정
-  apiGroup: rbac.authorization.k8s.io
----
-# 프로덕션 환경용 Role과 RoleBinding (기본적으로 주석 처리)
-# jcode-ai-4 네임스페이스용 Role
-# apiVersion: rbac.authorization.k8s.io/v1
-# kind: Role
-# metadata:
-#   name: watcher-proc-role  # Role 이름 수정
-#   namespace: jcode-ai-4
-# rules:
-# - apiGroups: [""]
-#   resources: ["pods"]
-#   verbs: ["get", "list", "watch"]
-# ---
-# jcode-ai-4 네임스페이스용 RoleBinding
-# apiVersion: rbac.authorization.k8s.io/v1
-# kind: RoleBinding
-# metadata:
-#   name: watcher-proc-binding  # Binding 이름 수정
-#   namespace: jcode-ai-4
-# subjects:
-# - kind: ServiceAccount
-#   name: watcher-proc-sa  # ServiceAccount 참조 수정
-#   namespace: watcher
-# roleRef:
-#   kind: Role
-#   name: watcher-proc-role  # Role 참조 수정
-#   apiGroup: rbac.authorization.k8s.io
-# ---
-# jcode-os-5 네임스페이스용 Role
-# apiVersion: rbac.authorization.k8s.io/v1
-# kind: Role
-# metadata:
-#   name: watcher-proc-role  # Role 이름 수정
-#   namespace: jcode-os-5
-# rules:
-# - apiGroups: [""]
-#   resources: ["pods"]
-#   verbs: ["get", "list", "watch"]
-# ---
-# jcode-os-5 네임스페이스용 RoleBinding
-# apiVersion: rbac.authorization.k8s.io/v1
-# kind: RoleBinding
-# metadata:
-#   name: watcher-proc-binding  # Binding 이름 수정
-#   namespace: jcode-os-5
-# subjects:
-# - kind: ServiceAccount
-#   name: watcher-proc-sa  # ServiceAccount 참조 수정
-#   namespace: watcher
-# roleRef:
-#   kind: Role
-#   name: watcher-proc-role  # Role 참조 수정
-#   apiGroup: rbac.authorization.k8s.io
