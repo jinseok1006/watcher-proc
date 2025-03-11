@@ -8,6 +8,7 @@ from ..homework.checker import HomeworkChecker
 from ..process.types import ProcessType
 from ..parser.base import Parser
 from ..parser.compiler import CCompilerParser
+from ..parser.python import PythonParser
 from ..utils.logging import get_logger
 
 class HomeworkHandler(EventHandler[EventBuilder, EventBuilder]):
@@ -15,7 +16,7 @@ class HomeworkHandler(EventHandler[EventBuilder, EventBuilder]):
     
     실행된 프로세스가 과제와 관련된 경우 과제 정보를 추가합니다.
     1. 유저 바이너리인 경우: 실행 파일이 과제 디렉토리 내에 있는지 확인
-    2. 컴파일러 프로세스인 경우: 명령어에서 소스 파일을 추출하고 과제 디렉토리 확인
+    2. 컴파일러/인터프리터 프로세스인 경우: 명령어에서 소스 파일을 추출하고 과제 디렉토리 확인
     """
     
     def __init__(self, homework_checker: HomeworkChecker):
@@ -23,13 +24,16 @@ class HomeworkHandler(EventHandler[EventBuilder, EventBuilder]):
         self.hw_checker = homework_checker
         self.gcc_parser = CCompilerParser(ProcessType.GCC)
         self.clang_parser = CCompilerParser(ProcessType.CLANG)
+        self.python_parser = PythonParser(ProcessType.PYTHON)
     
-    def _get_parser(self, process_type: ProcessType) -> Optional[CCompilerParser]:
+    def _get_parser(self, process_type: ProcessType) -> Optional[Parser]:
         """프로세스 타입에 맞는 파서를 반환합니다."""
         if process_type == ProcessType.GCC:
             return self.gcc_parser
         elif process_type == ProcessType.CLANG:
             return self.clang_parser
+        elif process_type == ProcessType.PYTHON:
+            return self.python_parser
         return None
     
     async def _handle_user_binary(self, builder: EventBuilder) -> Optional[EventBuilder]:
@@ -37,7 +41,7 @@ class HomeworkHandler(EventHandler[EventBuilder, EventBuilder]):
         try:
             hw_dir = self.hw_checker.get_homework_info(builder.base.binary_path)
             if hw_dir:
-                builder.homework = HomeworkInfo(homework_dir=hw_dir, source_file=builder.base.binary_path)
+                builder.homework = HomeworkInfo(homework_dir=hw_dir, source_file=None)
                 self.logger.info(f"과제 정보 설정 - 바이너리 실행: {builder.base.binary_path}, 과제: {hw_dir}")
             else:
                 self.logger.debug(f"무시 - 과제 디렉토리 외 실행 파일: {builder.base.binary_path}")
@@ -84,7 +88,9 @@ class HomeworkHandler(EventHandler[EventBuilder, EventBuilder]):
         - USER_BINARY: 실행 파일이 과제 디렉토리 내에 있는지 확인
         - GCC/CLANG: 소스 파일을 추출하고 과제 디렉토리 확인
         """
-        self.logger.info(f"시작 - 프로세스 타입: {builder.process.type}")
+        self.logger.info("=== 이벤트 파싱 완료 ===")
+        self.logger.info(f"프로세스: {builder.process.type}")
+        self.logger.info(f"실행 파일: {builder.base.binary_path}")
         
         try:
             if builder.process.type == ProcessType.USER_BINARY:
@@ -93,7 +99,7 @@ class HomeworkHandler(EventHandler[EventBuilder, EventBuilder]):
                 
             parser = self._get_parser(builder.process.type)
             if parser:
-                self.logger.info("컴파일러 처리 시작")
+                self.logger.info("컴파일러/인터프리터 처리 시작")
                 return await self._handle_source_file(builder, parser)
             
             self.logger.info(f"처리하지 않는 프로세스 타입: {builder.process.type}")

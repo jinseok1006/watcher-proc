@@ -5,7 +5,7 @@ from src.process.types import ProcessType
 
 @pytest.fixture
 def parser():
-    return PythonParser()
+    return PythonParser(process_type=ProcessType.PYTHON)
 
 def test_basic_python_script(parser):
     """기본 파이썬 스크립트 실행 테스트"""
@@ -22,7 +22,7 @@ def test_script_with_arguments(parser):
     
     # 옵션 형태의 인자
     result = parser.parse("script.py --verbose -o output.txt", "/home/student/hw1")
-    assert result.source_files == ["/home/student/hw1/script.py"]
+    assert result.source_files == ["/home/student/hw1/script.py"] 
     
     # 복잡한 인자들
     result = parser.parse(

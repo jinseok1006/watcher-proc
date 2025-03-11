@@ -57,14 +57,28 @@ def invalid_event_builder(invalid_raw_event):
 async def test_parse_hostname_success(handler):
     """호스트네임 파싱 성공 케이스를 테스트합니다."""
     # Given
-    hostname = "jcode-os-1-202012180-hash"
+    event = EventBuilder(base=RawBpfEvent(
+        hostname="jcode-os-1-202012180-hash",
+        binary_path="/usr/bin/gcc",
+        args="gcc -o test test.c",
+        pid=1234,
+        cwd="/home/test",
+        error_flags="0",
+        exit_code=0
+    ))
+    next_handler = Mock()
+    next_handler.handle = AsyncMock(return_value=event)
+    handler.set_next(next_handler)
     
     # When
-    class_div, student_id = handler._parse_hostname(hostname)
+    result = await handler.handle(event)
     
     # Then
-    assert class_div == "os-1"
-    assert student_id == "202012180"
+    assert result is not None
+    assert result.metadata is not None
+    assert result.metadata.class_div == "os-1"
+    assert result.metadata.student_id == "202012180"
+    next_handler.handle.assert_awaited_once_with(event)
 
 @pytest.mark.asyncio
 async def test_parse_hostname_invalid_format(handler):
@@ -79,9 +93,17 @@ async def test_parse_hostname_invalid_format(handler):
     
     # When/Then
     for hostname in invalid_hostnames:
-        with pytest.raises(ValueError) as exc_info:
-            handler._parse_hostname(hostname)
-        assert "잘못된 호스트네임 형식" in str(exc_info.value)
+        event = EventBuilder(base=RawBpfEvent(
+            hostname=hostname,
+            binary_path="/usr/bin/gcc",
+            args="gcc -o test test.c",
+            pid=1234,
+            cwd="/home/test",
+            error_flags="0",
+            exit_code=0
+        ))
+        result = await handler.handle(event)
+        assert result is None
 
 @pytest.mark.asyncio
 async def test_handle_success(handler, event_builder):

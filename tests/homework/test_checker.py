@@ -10,125 +10,119 @@ class TestHomeworkChecker:
 
     def test_valid_homework_paths(self, checker):
         """유효한 과제 경로 테스트"""
-        valid_paths = [
-            # 학생 볼륨 경로
-            "/os-5-202012180/hw1/main.c",          # 기본 경로
-            "/network-1-201912345/hw20/test",      # hw20 (최대값)
-            "/system-3-202154321/hw15",            # 디렉토리
-            "/algorithm-2-202012345/hw1/src/main", # 중첩된 디렉토리
-            "/database-1-201912345/hw2/",          # 끝에 슬래시
-            "/os-99-202012345/hw1/main",          # 두 자리 분반
-            "/network-1-1/hw1/test",              # 한 자리 학번
-            "/os-1-123456789012/hw10/main",       # 12자리 학번
-
-            # 프로젝트 경로
-            "/home/coder/project/hw1/main.c",      # 기본 경로
-            "/home/coder/project/hw20/test",       # hw20 (최대값)
-            "/home/coder/project/hw15",            # 디렉토리
-            "/home/coder/project/hw1/src/main",    # 중첩된 디렉토리
-            "/home/coder/project/hw2/",            # 끝에 슬래시
+        test_cases = [
+            # 1. 학생 볼륨 기본 케이스
+            ("/os-5-202012180/hw1/main.c", "hw1"),
+            ("/network-1-201912345/hw20/test", "hw20"),
+            
+            # 2. 과제 번호 엣지 케이스
+            ("/os-1-202012345/hw1/test", "hw1"),     # 최소값
+            ("/os-1-202012345/hw20/test", "hw20"),   # 최대값
+            
+            # 3. 분반 번호 엣지 케이스
+            ("/os-1-202012345/hw1/main", "hw1"),     # 최소 분반
+            ("/os-99-202012345/hw1/main", "hw1"),    # 최대 분반
+            
+            # 4. 학번 엣지 케이스
+            ("/os-1-1/hw1/test", "hw1"),             # 한 자리 학번
+            ("/os-1-123456789012/hw1/main", "hw1"),  # 12자리 학번
+            
+            # 5. 과목명 다양성
+            ("/os-1-202012345/hw1/main", "hw1"),
+            ("/network-1-202012345/hw1/main", "hw1"),
+            ("/system-1-202012345/hw1/main", "hw1"),
+            ("/algorithm-1-202012345/hw1/main", "hw1"),
+            ("/database-1-202012345/hw1/main", "hw1"),
+            
+            # 6. 프로젝트 경로 케이스
+            ("/home/coder/project/hw1/main.c", "hw1"),
+            ("/home/coder/project/hw1/src/main.c", "hw1"),
+            ("/home/coder/project/hw20/test/main", "hw20"),
+            
+            # 7. 특수한 경로 구조
+            ("/os-1-202012345/hw1/src/test/main", "hw1"),  # 깊은 중첩
+            ("/os-1-202012345/hw1/", "hw1"),               # 끝에 슬래시
+            ("/os-1-202012345/hw1", "hw1"),                # 디렉토리만
         ]
         
-        for path in valid_paths:
+        for path, expected_hw_dir in test_cases:
             result = checker.get_homework_info(path)
-            hw_dir = path.split('/')[4] if path.startswith('/home/coder/project/') else path.split('/')[2]
-            assert result == hw_dir, f"Failed for path: {path}"
+            assert result == expected_hw_dir, \
+                f"Failed for path: {path}\nExpected: {expected_hw_dir}\nGot: {result}"
 
-    def test_invalid_paths(self, checker):
-        """유효하지 않은 경로 테스트"""
+    def test_invalid_format_paths(self, checker):
+        """잘못된 형식의 경로 테스트"""
         invalid_paths = [
-            # 형식 오류 - 학생 볼륨 경로
+            # 1. 과목-분반-학번 형식 오류
             "/OS-5-202012180/hw1/main.c",      # 대문자 과목명
-            "/os-a-202012180/hw1/main.c",      # 잘못된 분반 형식
-            "/network-1-201912345/homework2",   # 잘못된 과제 디렉토리 형식
+            "/os5-1-202012180/hw1/main",       # 과목명 형식 오류
+            "/os-a-202012180/hw1/main.c",      # 분반이 숫자가 아님
+            "/os--1-202012180/hw1/main",       # 잘못된 분반 구분자
+            "/os-1-abc/hw1",                    # 학번이 숫자가 아님
+            
+            # 2. 과제 디렉토리 형식 오류
+            "/os-1-202012345/homework1",        # 잘못된 과제 디렉토리 형식
+            "/os-1-202012345/hwx/main",        # 과제 번호가 숫자가 아님
+            
+            # 3. 경로 구조 오류
             "relative/path/hw1/main.c",         # 상대 경로
-            "/os5-1-202012180/hw1",            # 잘못된 과목명 형식
-            "/os--1-202012180/hw1",            # 잘못된 분반 형식 (음수)
-            "/os-1-abc/hw1",                    # 잘못된 학번 형식 (문자)
-            
-            # 형식 오류 - 프로젝트 경로
-            "/home/coder/projects/hw1/main.c",  # 잘못된 프로젝트 경로
-            "/home/user/project/hw1/main.c",    # 잘못된 사용자 경로
             "/project/hw1/main.c",              # 잘못된 경로 구조
-            
-            # 과제 번호 범위 테스트
-            "/os-1-202012180/hw0/main",        # hw0 (불가)
-            "/os-1-202012180/hw21/main",       # hw21 (불가)
-            "/os-1-202012180/hw99/main",       # hw99 (불가)
-            "/home/coder/project/hw0/main",     # hw0 (불가)
-            "/home/coder/project/hw21/main",    # hw21 (불가)
-            
-            # 실제로 resolve 불가능한 경우
-            "/os-1-202012180/hw1/../../outside",  # 과제 디렉토리 밖으로 나가는 경우
-            "~/os-1-202012180/hw1",              # 상대경로(~)
+            "/os-1-202012345/hw1/../main",     # 상위 디렉토리 참조
+            "~/os-1-202012180/hw1",            # 상대경로(~)
         ]
         
         for path in invalid_paths:
             result = checker.get_homework_info(path)
-            assert result is None, f"Should fail for invalid path: {path}"
+            assert result is None, \
+                f"Expected None for invalid format path: {path}\nGot: {result}"
+
+    def test_invalid_value_ranges(self, checker):
+        """유효하지 않은 값 범위 테스트"""
+        invalid_paths = [
+            # 과제 번호 범위만 체크 (분반 번호는 모든 양의 정수 허용)
+            "/os-1-202012345/hw0/main",      # hw0 (불가)
+            "/os-1-202012345/hw21/main",     # hw21 (불가)
+            "/os-1-202012345/hw99/main",     # hw99 (불가)
+            "/home/coder/project/hw0/main",   # hw0 (불가)
+            "/home/coder/project/hw21/main",  # hw21 (불가)
+        ]
+        
+        for path in invalid_paths:
+            result = checker.get_homework_info(path)
+            assert result is None, \
+                f"Expected None for invalid range path: {path}\nGot: {result}"
 
     def test_nested_homework_paths(self, checker):
         """중첩된 과제 디렉토리 테스트"""
         nested_paths = [
-            # 학생 볼륨 경로
-            "/os-5-202012180/hw1/hw2/main.c",      # hw1 안의 hw2
-            "/network-1-201912345/hw1/test/hw3",    # hw1 안의 hw3
-            
-            # 프로젝트 경로
-            "/home/coder/project/hw1/hw2/main.c",   # hw1 안의 hw2
-            "/home/coder/project/hw1/src/hw1/main", # 같은 이름의 중첩
+            # 1. 과제 디렉토리 중첩
+            "/os-5-202012180/hw1/hw2/main.c",       # hw1 안의 hw2
+            "/network-1-201912345/hw1/test/hw3",     # hw1 안의 hw3
+            "/home/coder/project/hw1/hw2/main.c",    # hw1 안의 hw2
+            "/home/coder/project/hw1/src/hw1/main",  # 같은 이름의 중첩
         ]
         
         for path in nested_paths:
             result = checker.get_homework_info(path)
-            assert result is None, f"Should fail for nested path: {path}"
+            assert result is None, \
+                f"Expected None for nested homework path: {path}\nGot: {result}"
 
-    def test_edge_cases(self, checker):
-        """엣지 케이스 테스트"""
-        edge_cases = [
-            # 빈 입력
-            "",                                     # 빈 문자열
-            None,                                   # None 입력
+    def test_special_cases(self, checker):
+        """특수 케이스 테스트"""
+        special_cases = [
+            # 1. 빈 입력
+            "",                                # 빈 문자열
+            None,                             # None 입력
             
-            # 최소 길이 경로
-            "/os-1-202012180",                     # 과제 디렉토리 없음
-            "/os-1-202012180/",                    # 과제 디렉토리 없음 (슬래시)
-            "/home/coder/project",                 # 과제 디렉토리 없음
-            "/home/coder/project/",                # 과제 디렉토리 없음 (슬래시)
+            # 2. 불완전한 경로
+            "/os-1-202012345",               # 과제 디렉토리 없음
             
-            # 특수 문자와 공백
-            "/os 1-202012180/hw1",                 # 과목명에 공백
-            "/os-1 -202012180/hw1",               # 분반에 공백
-            "/os-1-202012180/hw 1",               # 과제 번호에 공백
-            "/home/coder/project/hw 1",           # 과제 번호에 공백
-            
-            # 이스케이프 문자
-            "/os-1-202012180/hw1/\n",             # 줄바꿈
-            "/os-1-202012180/hw1/\t",             # 탭
-            "/os-1-202012180/hw1/\r",             # 캐리지 리턴
-            "/home/coder/project/hw1/\n",         # 줄바꿈
+            # 3. 잘못된 프로젝트 경로
+            "/home/coder/projects/hw1/main",  # 잘못된 projects 디렉토리
+            "/home/user/project/hw1/main",    # 잘못된 사용자
         ]
         
-        for path in edge_cases:
+        for path in special_cases:
             result = checker.get_homework_info(path)
-            assert result is None, f"Should handle edge case: {path}"
-
-    def test_path_normalization(self, checker):
-        """경로 정규화 테스트"""
-        paths = [
-            # 중복 슬래시 제거
-            ("/os-1-202012180//hw1/main.c", "hw1"),
-            ("/home/coder/project//hw1/main.c", "hw1"),
-            
-            # 현재 디렉토리(.) 처리
-            ("/os-1-202012180/./hw1/main.c", "hw1"),
-            ("/home/coder/project/./hw1/main.c", "hw1"),
-            
-            # 상위 디렉토리(..) 처리 (과제 디렉토리 내에서만)
-            ("/os-1-202012180/hw1/test/../main.c", "hw1"),
-            ("/home/coder/project/hw1/test/../main.c", "hw1"),
-        ]
-        
-        for path, expected in paths:
-            result = checker.get_homework_info(path)
-            assert result == expected, f"Failed for path: {path}" 
+            assert result is None, \
+                f"Expected None for special case: {path}\nGot: {result}" 

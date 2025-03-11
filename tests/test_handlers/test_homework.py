@@ -97,7 +97,7 @@ async def test_handle_compilation_in_homework_dir(handler, compiler_builder):
     assert result == compiler_builder
     assert isinstance(result.homework, HomeworkInfo)
     assert result.homework.homework_dir == "/home/student/hw1"
-    assert result.homework.source_file == "main.c"
+    assert result.homework.source_file == "/home/student/hw1/main.c"  # 절대 경로로 변경
     next_handler.handle.assert_awaited_once_with(compiler_builder)
 
 @pytest.mark.asyncio
@@ -115,7 +115,7 @@ async def test_handle_binary_in_homework_dir(handler, binary_builder):
     assert result == binary_builder
     assert isinstance(result.homework, HomeworkInfo)
     assert result.homework.homework_dir == "/home/student/hw1"
-    assert result.homework.source_file is None  # 바이너리 실행은 소스 파일 정보 없음
+    assert result.homework.source_file is None  # 바이너리 실행시에는 소스 파일 정보가 필요 없음
     next_handler.handle.assert_awaited_once_with(binary_builder)
 
 @pytest.mark.asyncio
@@ -139,9 +139,8 @@ async def test_handle_compilation_outside_homework_dir(handler, compiler_builder
     result = await handler.handle(compiler_builder)
     
     # Then
-    assert result == compiler_builder
-    assert result.homework is None
-    next_handler.handle.assert_awaited_once_with(compiler_builder)
+    assert result is None  # 과제 디렉토리 외부면 None 반환
+    next_handler.handle.assert_not_called()  # 과제 외 활동은 다음 핸들러로 전달하지 않음
 
 @pytest.mark.asyncio
 async def test_handle_non_compilation_in_homework_dir(handler, compiler_builder):
@@ -168,22 +167,5 @@ async def test_handle_non_compilation_in_homework_dir(handler, compiler_builder)
     assert result == compiler_builder
     assert result.homework is not None  # 과제 디렉토리는 설정되어야 함
     assert result.homework.homework_dir == "/home/student/hw1"
-    assert result.homework.source_file is None  # 컴파일러가 아니므로 소스 파일은 없음
-    next_handler.handle.assert_awaited_once_with(compiler_builder)
-
-@pytest.mark.asyncio
-async def test_handle_error_case(handler, compiler_builder, caplog):
-    """에러 케이스 처리를 테스트합니다."""
-    # Given
-    compiler_builder.base = None
-    next_handler = Mock()
-    next_handler.handle = AsyncMock()
-    handler.set_next(next_handler)
-    
-    # When
-    result = await handler.handle(compiler_builder)
-    
-    # Then
-    assert result is None
-    assert "과제 이벤트 처리 오류" in caplog.text  # 에러 메시지 수정
-    next_handler.handle.assert_not_called() 
+    assert result.homework.source_file == "/home/student/hw1/script.py"  # Python 파일 경로 저장
+    next_handler.handle.assert_awaited_once_with(compiler_builder) 

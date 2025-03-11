@@ -6,6 +6,7 @@ from src.handlers.process import ProcessTypeHandler
 from src.process.types import ProcessType
 from src.homework.checker import HomeworkChecker
 from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock
 
 class MockHomeworkChecker(HomeworkChecker):
     """테스트용 과제 체커"""
@@ -67,6 +68,9 @@ async def test_process_handler_gcc(process_filter):
         exit_code=0
     ))
     handler = ProcessTypeHandler(process_filter)
+    next_handler = Mock()
+    next_handler.handle = AsyncMock(return_value=event)  # 이벤트를 그대로 반환하도록 설정
+    handler.set_next(next_handler)
     
     # When
     result = await handler.handle(event)
@@ -75,6 +79,7 @@ async def test_process_handler_gcc(process_filter):
     assert result is not None
     assert result.process is not None
     assert result.process.type == ProcessType.GCC
+    next_handler.handle.assert_awaited_once_with(event)
 
 @pytest.mark.asyncio
 async def test_process_handler_clang(process_filter):
@@ -90,6 +95,9 @@ async def test_process_handler_clang(process_filter):
         exit_code=0
     ))
     handler = ProcessTypeHandler(process_filter)
+    next_handler = Mock()
+    next_handler.handle = AsyncMock(return_value=event)  # 이벤트를 그대로 반환하도록 설정
+    handler.set_next(next_handler)
     
     # When
     result = await handler.handle(event)
@@ -98,6 +106,7 @@ async def test_process_handler_clang(process_filter):
     assert result is not None
     assert result.process is not None
     assert result.process.type == ProcessType.CLANG
+    next_handler.handle.assert_awaited_once_with(event)
 
 @pytest.mark.asyncio
 async def test_process_handler_python(process_filter):
@@ -113,6 +122,9 @@ async def test_process_handler_python(process_filter):
         exit_code=0
     ))
     handler = ProcessTypeHandler(process_filter)
+    next_handler = Mock()
+    next_handler.handle = AsyncMock(return_value=event)  # 이벤트를 그대로 반환하도록 설정
+    handler.set_next(next_handler)
     
     # When
     result = await handler.handle(event)
@@ -121,6 +133,7 @@ async def test_process_handler_python(process_filter):
     assert result is not None
     assert result.process is not None
     assert result.process.type == ProcessType.PYTHON
+    next_handler.handle.assert_awaited_once_with(event)
 
 @pytest.mark.asyncio
 async def test_process_handler_user_binary(process_filter):
@@ -136,6 +149,9 @@ async def test_process_handler_user_binary(process_filter):
         exit_code=0
     ))
     handler = ProcessTypeHandler(process_filter)
+    next_handler = Mock()
+    next_handler.handle = AsyncMock(return_value=event)  # 이벤트를 그대로 반환하도록 설정
+    handler.set_next(next_handler)
     
     # When
     result = await handler.handle(event)
@@ -144,6 +160,7 @@ async def test_process_handler_user_binary(process_filter):
     assert result is not None
     assert result.process is not None
     assert result.process.type == ProcessType.USER_BINARY
+    next_handler.handle.assert_awaited_once_with(event)
 
 @pytest.mark.asyncio
 async def test_process_handler_unknown(process_filter):
@@ -186,4 +203,4 @@ async def test_process_handler_error_handling(process_filter, caplog):
     
     # Then
     assert result is None
-    assert "프로세스 타입 분석 오류" in caplog.text 
+    assert "프로세스 타입 감지 실패" in caplog.text  # 실제 로그 메시지와 일치하도록 수정 

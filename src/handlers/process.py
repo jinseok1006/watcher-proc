@@ -48,4 +48,4 @@ class ProcessTypeHandler(EventHandler[EventBuilder, EventBuilder]):
             
         except Exception as e:
             self.logger.error(f"프로세스 타입 감지 실패 - 오류: {str(e)}")
-            raise 
+            return None 
