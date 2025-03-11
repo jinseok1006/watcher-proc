@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import Mock, patch
 from src.process.filter import ProcessFilter
 from src.process.types import ProcessType
-from src.homework.base import HomeworkChecker
+from src.homework.checker import HomeworkChecker
 
 class TestProcessFilter:
     @pytest.fixture
@@ -71,15 +71,6 @@ class TestProcessFilter:
         
         result = process_filter.get_process_type('/os-5-202012180/hw1/main')
         assert result == ProcessType.UNKNOWN
-
-    def test_container_id_handling(self, process_filter):
-        """컨테이너 ID 처리 테스트"""
-        # 컨테이너 ID가 제공되는 경우에도 동일하게 동작하는지 확인
-        binary_path = '/os-5-202012180/hw1/main'
-        container_id = '3b5efcb73bb5'
-        
-        result = process_filter.get_process_type(binary_path, container_id)
-        assert result == ProcessType.USER_BINARY
 
     def test_edge_cases(self, process_filter):
         """엣지 케이스 테스트"""

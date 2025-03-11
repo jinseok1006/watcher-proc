@@ -1,10 +1,11 @@
 import pytest
 from typing import Optional, Dict, List
-from src.events.models import EventBuilder
+from src.events.models import EventBuilder, ProcessTypeInfo
 from src.bpf.event import RawBpfEvent
 from src.handlers.process import ProcessTypeHandler
 from src.process.types import ProcessType
-from src.homework.base import HomeworkChecker
+from src.homework.checker import HomeworkChecker
+from unittest.mock import Mock, patch
 
 class MockHomeworkChecker(HomeworkChecker):
     """테스트용 과제 체커"""
@@ -28,7 +29,7 @@ class MockProcessFilter:
         }
         self.hw_checker = homework_checker
         
-    def get_process_type(self, binary_path: str, container_id: str = "") -> ProcessType:
+    def get_process_type(self, binary_path: str) -> ProcessType:
         """바이너리 경로로 프로세스 타입 결정"""
         # 1. 시스템 바이너리 체크
         for proc_type, patterns in self.patterns.items():

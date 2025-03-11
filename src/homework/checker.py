@@ -1,60 +1,41 @@
 import re
 import os
-from dataclasses import dataclass
 from typing import Optional
 from pathlib import Path
-from .base import HomeworkChecker
 from ..utils.logging import get_logger
 
-@dataclass(frozen=True)
-class HomeworkPath:
-    """파싱된 과제 경로 정보"""
-    subject: str
-    section: int
-    student_id: str
-    homework_number: int
-    sub_path: Optional[str] = None
-
-    @property
-    def homework_dir(self) -> str:
-        """과제 디렉토리명 반환"""
-        return f"hw{self.homework_number}"
-
-class DefaultHomeworkChecker(HomeworkChecker):
-    """과제 디렉토리 체커 구현"""
-    # 경로 패턴 상수
-    SUBJECT = r'[a-z]+'                    # 과목명: 영문 소문자만
-    SECTION = r'\d+'                       # 분반: 숫자
-    STUDENT_ID = r'\d+'                    # 학번: 숫자
-    HOMEWORK = r'hw(?:[1-9]|1[0-9]|20)'   # 과제 번호: hw1-hw20
-    SUB_PATH = r'/[^/].*'                  # 서브 경로: 슬래시로 시작하고 비어있지 않은 경로
-
+class HomeworkChecker:
+    """과제 경로 검증기"""
     def __init__(self):
         self.logger = get_logger(__name__)
-        # 프로덕션 환경에서는 반드시 아래 패턴을 사용해야 함
-        # 학생 컨테이너의 경로 구조: /{subject}-{section}-{student_id}/hw{n}/...
+        # hw 디렉토리 이름이 정확히 매칭되도록 경계 조건 추가
+        homework_pattern = r'hw(?:20|1[0-9]|[1-9])(?=/|$)'  # hw1-hw20 (순서 중요, 끝 경계 추가)
         self.pattern = re.compile(
-            f'^/({self.SUBJECT})-({self.SECTION})-({self.STUDENT_ID})/'
-            f'({self.HOMEWORK})({self.SUB_PATH})?$'
+            r'^(?:/[a-z]+-\d+-\d+/({homework_pattern})|'  # /subject-section-id/hw{n}
+            r'/home/coder/project/({homework_pattern}))'   # /home/coder/project/hw{n}
+            .format(homework_pattern=homework_pattern)
         )
-        # 개발/테스트 환경에서는 아래 패턴 사용 가능
-        # self.pattern = re.compile(
-        #     f'.*/({self.SUBJECT})-({self.SECTION})-({self.STUDENT_ID})/'
-        #     f'({self.HOMEWORK})({self.SUB_PATH})?$'
-        # )
         self.logger.info("[HomeworkChecker] 초기화 완료")
 
     def get_homework_info(self, path: str) -> str | None:
-        """과제 경로에서 과제 디렉토리명 추출"""
+        """과제 경로에서 과제 디렉토리명 추출
+
+        Args:
+            path: 완전한 절대 경로 (소스 파일 또는 바이너리 파일 경로)
+                 예: /os-1-202012345/hw1/main.c 또는 /home/coder/project/hw1/main
+
+        Returns:
+            str | None: 경로가 과제 형식에 맞는 경우 hw 디렉토리명(예: hw1),
+                       형식에 맞지 않는 경우 None
+        """
         try:
-            result = self._validate(path)
-            return result.homework_dir if result else None
+            return self._validate(path)
         except Exception as e:
             self.logger.error(f"[HomeworkChecker] 경로 검사 실패 - 파일: {path}, 오류: {e}")
             return None
 
-    def _validate(self, path: str | Path) -> Optional[HomeworkPath]:
-        """경로 검증 및 파싱"""
+    def _validate(self, path: str | Path) -> str | None:
+        """경로 검증 및 hw 디렉토리명 추출"""
         try:
             if path is None:
                 self.logger.debug("[HomeworkChecker] 검증 실패 - 경로가 None입니다")
@@ -90,19 +71,10 @@ class DefaultHomeworkChecker(HomeworkChecker):
                 self.logger.debug(f"[HomeworkChecker] 검증 실패 - 경로 패턴이 일치하지 않습니다: {normalized_path}")
                 return None
 
-            # 결과 파싱
-            subject, section, student_id, hw_dir = match.groups()[:4]
-            sub_path = match.group(5)
-
-            result = HomeworkPath(
-                subject=subject,
-                section=int(section),
-                student_id=student_id,
-                homework_number=int(hw_dir[2:]),  # 'hw1' -> 1
-                sub_path=sub_path
-            )
-            self.logger.debug(f"[HomeworkChecker] 검증 성공 - 경로: {normalized_path}, 결과: {result}")
-            return result
+            # hw 디렉토리명 반환 (두 패턴 중 매칭된 그룹)
+            hw_dir = match.group(1) or match.group(2)
+            self.logger.debug(f"[HomeworkChecker] 검증 성공 - 경로: {normalized_path}, hw: {hw_dir}")
+            return hw_dir
 
         except (TypeError, AttributeError, ValueError) as e:
             self.logger.debug(f"[HomeworkChecker] 검증 실패 - 파싱 중 오류 발생: {path}, 오류: {e}")

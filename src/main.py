@@ -11,7 +11,7 @@ from src.bpf.collector import BPFCollector
 from src.bpf.event import RawBpfEvent
 from src.events.models import EventBuilder
 from src.process.filter import ProcessFilter
-from src.homework.checker import DefaultHomeworkChecker
+from src.homework.checker import HomeworkChecker
 from src.handlers.chain import build_handler_chain
 from src.utils.logging import get_logger, set_pid, setup_logging
 
@@ -89,7 +89,7 @@ async def main():
         
         # 핸들러 체인 구성
         logger.debug("[초기화] 핸들러 체인 구성 시작")
-        homework_checker = DefaultHomeworkChecker()
+        homework_checker = HomeworkChecker()
         process_filter = ProcessFilter(homework_checker)
         handler_chain = build_handler_chain(
             process_filter=process_filter,

@@ -1,8 +1,10 @@
 from typing import Dict, List
 from .types import ProcessType
 from ..config.settings import settings
-from ..homework.base import HomeworkChecker
+from ..homework.checker import HomeworkChecker
 from ..utils.logging import get_logger
+import re
+from ..events.models import ProcessTypeInfo
 
 class ProcessFilter:
     """프로세스 타입 결정"""
@@ -14,7 +16,7 @@ class ProcessFilter:
         self.hw_checker = homework_checker
         self.logger.info(f"[ProcessFilter] 초기화 완료 - 패턴: {self.patterns}")
 
-    def get_process_type(self, binary_path: str, container_id: str = "") -> ProcessType:
+    def get_process_type(self, binary_path: str) -> ProcessType:
         """실행된 프로세스의 타입을 결정
 
         Args:
@@ -22,8 +24,6 @@ class ProcessFilter:
                 예시: "/usr/lib/llvm-18/bin/clang" (컴파일러)
                 예시: "/home/coder/project/hw1/a.out" (과제 실행 파일)
                 예시: "/usr/bin/ls" (기타 프로세스)
-            container_id: 컨테이너 ID (선택적)
-                예시: "9a879f2ecd37"
 
         Returns:
             ProcessType:

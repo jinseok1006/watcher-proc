@@ -18,7 +18,7 @@ from .homework import HomeworkHandler
 from .api import APIHandler
 from ..events.models import EventBuilder
 from ..process.filter import ProcessFilter
-from ..homework.base import HomeworkChecker
+from ..homework.checker import HomeworkChecker
 
 def build_handler_chain(
     process_filter: ProcessFilter,

@@ -8,7 +8,7 @@ from src.events.models import EventBuilder, ProcessTypeInfo, HomeworkInfo
 from src.bpf.event import RawBpfEvent
 from src.process.types import ProcessType
 from src.process.filter import ProcessFilter
-from src.homework.base import HomeworkChecker
+from src.homework.checker import HomeworkChecker
 
 class MockHomeworkChecker(HomeworkChecker):
     """테스트용 과제 체커"""

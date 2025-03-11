@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .base import EventHandler
 from ..events.models import EventBuilder, HomeworkInfo
-from ..homework.base import HomeworkChecker
+from ..homework.checker import HomeworkChecker
 from ..process.types import ProcessType
 from ..parser.base import Parser
 from ..parser.compiler import CCompilerParser
