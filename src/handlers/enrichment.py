@@ -31,29 +31,38 @@ class EnrichmentHandler(EventHandler[EventBuilder, EventBuilder]):
             처리된 이벤트 빌더 또는 None
         """
         try:
-            self.logger.info("메타데이터 보강 시작")
+            # 초기 이벤트 정보 (INFO)
+            self.logger.info(
+                f"이벤트 수신: "
+                f"binary={builder.base.binary_path}, "
+                f"args={builder.base.args}, "
+                f"cwd={builder.base.cwd}, "
+                f"exit_code={builder.base.exit_code}"
+            )
             
-            # 호스트네임에서 정보 추출
+            self.logger.debug("메타데이터 보강 시작")
             match = self._hostname_pattern.match(builder.base.hostname)
+            
             if not match:
-                self.logger.warning(f"호스트네임 패턴 불일치 - 호스트네임: {builder.base.hostname}")
+                # 핸들링 체인 종료 조건 (INFO)
+                self.logger.info(f"호스트네임 패턴 불일치로 처리 중단: {builder.base.hostname}")
                 return None
                 
-            # 메타데이터 설정
             builder.metadata = EventMetadata(
                 class_div=match.group("class_div"),
                 student_id=match.group("student_id"),
                 timestamp=datetime.now(timezone.utc)
             )
             
-            self.logger.info(
-                f"메타데이터 보강 완료 - "
-                f"분반: {builder.metadata.class_div}, "
-                f"학번: {builder.metadata.student_id}"
+            # 처리 성공 (DEBUG)
+            self.logger.debug(
+                f"메타데이터 보강 완료: "
+                f"class_div={builder.metadata.class_div}, "
+                f"student_id={builder.metadata.student_id}"
             )
             
             return await self._handle_next(builder)
             
         except Exception as e:
-            self.logger.error(f"메타데이터 보강 실패 - 오류: {str(e)}")
-            raise 
+            self.logger.error(f"메타데이터 보강 실패: {str(e)}")
+            return None 

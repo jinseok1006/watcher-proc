@@ -13,7 +13,7 @@ class APIClient:
     async def _send_event(self, endpoint: str, data: Dict[str, Any]) -> bool:
         """이벤트 전송 공통 로직"""
         try:
-            # 개발 환경에서는 실제 요청을 보내지 않고 로깅만 수행
+            self.logger.debug(f"API 요청 시작: {endpoint}")
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f'{self.base_url}{endpoint}',
@@ -22,14 +22,13 @@ class APIClient:
                 ) as response:
                     if response.status >= 400:
                         error_text = await response.text()
-                        self.logger.error(f"API 요청 실패: status={response.status}, response={error_text}")
+                        self.logger.error(f"API 실패: status={response.status}, endpoint={endpoint}")
                         return False
+                    self.logger.info(f"API 성공: endpoint={endpoint}")
                     return True
-            # self.logger.info(f"API 요청 - endpoint: {endpoint}, data: {data}")
-            # return True
                     
         except Exception as e:
-            self.logger.error(f"API 예상치 못한 오류: {str(e)}")
+            self.logger.error(f"API 오류: endpoint={endpoint}, error={str(e)}")
             return False
 
     async def send_binary_execution(self, event: Event) -> bool:

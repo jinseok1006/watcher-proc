@@ -10,7 +10,7 @@ class CCompilerParser(Parser):
         self.process_type = process_type
         self.logger = get_logger(__name__)
         self.skip_options = settings.COMPILER_SKIP_OPTIONS
-        self.logger.info(f"[CCompilerParser] {process_type.name} 파서 초기화 완료")
+        self.logger.debug(f"[CCompilerParser] {process_type.name} 파서 초기화 완료")
     
     def parse(self, args: str, cwd: str) -> CommandResult:
         """컴파일러 명령어 파싱
@@ -31,7 +31,7 @@ class CCompilerParser(Parser):
         Note:
             다음 옵션과 그 뒤의 인자는 무시됨: {-o, -I, -include, -D, -U, -MF}
         """
-        self.logger.info(f"[CCompilerParser] 명령어 파싱 시작 - 명령어: {args}")
+        self.logger.debug(f"[CCompilerParser] 명령어 파싱 시작: {args}")
         args_list = args.split()
         source_files = []
         skip_next = False
@@ -42,7 +42,7 @@ class CCompilerParser(Parser):
                 continue
             
             if arg in self.skip_options:
-                self.logger.debug(f"[CCompilerParser] 옵션 스킵 - 옵션: {arg}")
+                self.logger.debug(f"[CCompilerParser] 옵션 스킵: {arg}")
                 skip_next = True
                 continue
                 
@@ -50,12 +50,12 @@ class CCompilerParser(Parser):
                 full_path = Path(cwd) / arg
                 resolved_path = str(full_path.resolve())
                 source_files.append(resolved_path)
-                self.logger.info(f"[CCompilerParser] 소스 파일 발견 - 파일: {resolved_path}")
+                self.logger.debug(f"[CCompilerParser] 소스 파일 발견: {resolved_path}")
         
         result = CommandResult(
             source_files=source_files,
             cwd=cwd,
             process_type=self.process_type
         )
-        self.logger.info(f"[CCompilerParser] 명령어 파싱 완료 - 결과: {result}")
+        self.logger.debug(f"[CCompilerParser] 명령어 파싱 완료: {result}")
         return result 

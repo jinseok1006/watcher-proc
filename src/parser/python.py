@@ -31,13 +31,11 @@ class PythonParser(Parser):
             cwd: 현재 작업 디렉토리
         """
         try:
-            # 빈 문자열이나 공백만 있는 경우
             if not args or args.isspace():
+                self.logger.debug("[PythonParser] 빈 명령어")
                 return CommandResult(source_files=[], cwd=cwd, process_type=self.process_type)
             
             args_list = args.split()
-            
-            # 첫 번째로 나오는 .py 파일 찾기
             potential_source = None
             for arg in args_list:
                 if arg.endswith('.py'):
@@ -45,12 +43,11 @@ class PythonParser(Parser):
                     break
                     
             if not potential_source:
-                self.logger.debug("Python 소스 파일을 찾을 수 없음")
+                self.logger.debug("[PythonParser] Python 소스 파일을 찾을 수 없음")
                 return CommandResult(source_files=[], cwd=cwd, process_type=self.process_type)
             
-            # 상대 경로를 절대 경로로 변환
             source_path = str(Path(cwd) / potential_source)
-            self.logger.debug(f"Python 소스 파일 발견: {source_path}")
+            self.logger.debug(f"[PythonParser] Python 소스 파일 발견: {source_path}")
             
             return CommandResult(
                 source_files=[source_path],
@@ -59,5 +56,5 @@ class PythonParser(Parser):
             )
             
         except Exception as e:
-            self.logger.error(f"Python 명령어 파싱 실패: {str(e)}")
+            self.logger.error(f"[PythonParser] Python 명령어 파싱 실패: {str(e)}")
             return CommandResult(source_files=[], cwd=cwd, process_type=self.process_type)

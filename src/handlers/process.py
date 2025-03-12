@@ -33,19 +33,19 @@ class ProcessTypeHandler(EventHandler[EventBuilder, EventBuilder]):
         """
         try:
             self.logger.debug("프로세스 타입 감지 시작")
-            
-            # 프로세스 타입 감지
             process_type = self.process_filter.get_process_type(builder.base.binary_path)
+            
             if process_type == ProcessType.UNKNOWN:
-                self.logger.debug(f"알 수 없는 프로세스 타입 - 실행 파일: {builder.base.binary_path}")
+                # 핸들링 체인 종료 조건 (INFO)
+                self.logger.debug(f"지원하지 않는 프로세스 타입으로 처리 중단: {builder.base.binary_path}")
                 return None
                 
-            # 프로세스 정보 설정
             builder.process = ProcessTypeInfo(type=process_type)
-            self.logger.info(f"프로세스 타입 감지 완료 - 타입: {process_type}")
+            # 처리 성공 (DEBUG)
+            self.logger.debug(f"프로세스 타입 감지 완료: type={process_type}")
             
             return await self._handle_next(builder)
             
         except Exception as e:
-            self.logger.error(f"프로세스 타입 감지 실패 - 오류: {str(e)}")
+            self.logger.error(f"프로세스 타입 감지 실패: {str(e)}")
             return None 

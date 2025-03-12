@@ -12,7 +12,7 @@ from src.events.models import EventBuilder
 from src.process.filter import ProcessFilter
 from src.homework.checker import HomeworkChecker
 from src.handlers.chain import build_handler_chain
-from src.utils.logging import get_logger, set_pid, setup_logging
+from src.utils.logging import get_logger, set_pid, setup_logging, set_hostname
 from src.config.settings import settings
 
 class Application:
@@ -31,6 +31,8 @@ class Application:
         """실제 이벤트 처리"""
         try:
             set_pid(event.pid)
+            set_hostname(event.hostname)
+            
             self.logger.debug(f"[이벤트 수신] 실행 파일: {event.binary_path}")
             builder = EventBuilder(event)
             result = await self.handler_chain.handle(builder)
@@ -38,6 +40,7 @@ class Application:
                 self.logger.info(f"[이벤트 처리 완료] 타입: {result.process.type if result.process else 'Unknown'}")
         finally:
             set_pid(None)
+            set_hostname(None)
 
     async def process_events(self):
         """이벤트 처리 루프"""

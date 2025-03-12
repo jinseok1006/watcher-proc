@@ -31,7 +31,7 @@ class HomeworkChecker:
         try:
             return self._validate(path)
         except Exception as e:
-            self.logger.error(f"[HomeworkChecker] 경로 검사 실패 - 파일: {path}, 오류: {e}")
+            self.logger.error(f"[HomeworkChecker] 경로 검사 실패: {str(e)}")
             return None
 
     def _validate(self, path: str | Path) -> str | None:

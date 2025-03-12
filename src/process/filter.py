@@ -41,26 +41,26 @@ class ProcessFilter:
             # 1. 시스템 바이너리 (컴파일러/인터프리터) 체크
             for proc_type, patterns in self.patterns.items():
                 if any(pattern in binary_path for pattern in patterns):
-                    self.logger.info(
-                        f"[ProcessFilter] 시스템 프로세스 감지 - "
-                        f"타입: {proc_type.name}, "
-                        f"경로: {binary_path}"
+                    self.logger.debug(
+                        f"[ProcessFilter] 시스템 프로세스 감지: "
+                        f"type={proc_type.name}, "
+                        f"path={binary_path}"
                     )
                     return proc_type
 
             # 2. 과제 디렉토리 내 실행 파일 체크
             if hw_dir := self.hw_checker.get_homework_info(binary_path):
-                self.logger.info(
-                    f"[ProcessFilter] 과제 실행 파일 감지 - "
-                    f"경로: {binary_path}, "
-                    f"과제: {hw_dir}"
+                self.logger.debug(
+                    f"[ProcessFilter] 과제 실행 파일 감지: "
+                    f"path={binary_path}, "
+                    f"hw_dir={hw_dir}"
                 )
                 return ProcessType.USER_BINARY
 
             # 3. 그 외는 무시
-            self.logger.debug(f"[ProcessFilter] 무시된 프로세스 - 경로: {binary_path}")
+            self.logger.debug(f"[ProcessFilter] 무시된 프로세스: {binary_path}")
             return ProcessType.UNKNOWN
             
         except Exception as e:
-            self.logger.error(f"[ProcessFilter] 프로세스 타입 결정 실패 - 경로: {binary_path}, 오류: {str(e)}")
+            self.logger.error(f"[ProcessFilter] 프로세스 타입 결정 실패: {str(e)}")
             return ProcessType.UNKNOWN 
