@@ -10,7 +10,7 @@ class CCompilerParser(Parser):
         self.process_type = process_type
         self.logger = get_logger(__name__)
         self.skip_options = settings.COMPILER_SKIP_OPTIONS
-        self.logger.debug(f"[CCompilerParser] {process_type.name} 파서 초기화 완료")
+        self.logger.info(f"[CCompilerParser] {process_type.name} 파서 초기화 완료")
     
     def parse(self, args: str, cwd: str) -> CommandResult:
         """컴파일러 명령어 파싱
