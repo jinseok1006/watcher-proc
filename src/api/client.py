@@ -14,6 +14,7 @@ class APIClient:
         """이벤트 전송 공통 로직"""
         try:
             self.logger.debug(f"API 요청 시작: {endpoint}")
+            self.logger.debug(f"API 요청 데이터: {data}")
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f'{self.base_url}{endpoint}',
@@ -68,6 +69,7 @@ class APIClient:
             'exit_code': event.base.exit_code,
             'cmdline': event.base.args,
             'cwd': event.base.cwd,
-            'binary_path': event.base.binary_path
+            'binary_path': event.base.binary_path,
+            'target_path': event.homework.source_file
         }
         return await self._send_event(endpoint, data) 
