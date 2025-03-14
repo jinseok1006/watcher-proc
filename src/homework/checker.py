@@ -11,7 +11,7 @@ class HomeworkChecker:
         # hw 디렉토리 이름이 정확히 매칭되도록 경계 조건 추가
         homework_pattern = r'hw(?:20|1[0-9]|[1-9])(?=/|$)'  # hw1-hw20 (순서 중요, 끝 경계 추가)
         self.pattern = re.compile(
-            r'^(?:/[a-z]+-\d+-\d+/({homework_pattern})|'  # /subject-section-id/hw{n}
+            r'^(?:/workspace/[a-z]+-\d+-\d+/({homework_pattern})|'  # /workspace/subject-section-id/hw{n}
             r'/home/coder/project/({homework_pattern}))'   # /home/coder/project/hw{n}
             .format(homework_pattern=homework_pattern)
         )
