@@ -44,6 +44,9 @@ class Settings:
         # 로깅 설정
         self.log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 
+        # 프로메테우스 설정
+        self.prometheus_port = int(os.getenv("PROMETHEUS_PORT", "9090"))
+
 
 # 싱글톤 인스턴스 생성
 settings = Settings()

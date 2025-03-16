@@ -14,6 +14,7 @@ from src.homework.checker import HomeworkChecker
 from src.handlers.chain import build_handler_chain
 from src.utils.logging import get_logger, set_pid, setup_logging, set_hostname
 from src.config.settings import settings
+from src.metrics.prometheus import PrometheusMetrics
 
 class Application:
     def __init__(self):
@@ -26,6 +27,7 @@ class Application:
         self.collector = None
         self.handler_chain = None
         self.is_running = False
+        self.metrics = PrometheusMetrics()
 
     async def handle_event(self, event: RawBpfEvent):
         """실제 이벤트 처리"""
@@ -53,6 +55,11 @@ class Application:
         """애플리케이션 시작"""
         try:
             self.logger.info("[시작] 프로세스 모니터링 시작")
+            
+            # 프로메테우스 메트릭 서버 시작
+            self.logger.debug("[초기화] 프로메테우스 메트릭 서버 시작")
+            self.metrics.start_metrics_server()
+            self.logger.debug("[초기화] 프로메테우스 메트릭 서버 시작 완료")
             
             # BPF 컬렉터 초기화
             self.logger.debug("[초기화] BPF 컬렉터 초기화 시작")
