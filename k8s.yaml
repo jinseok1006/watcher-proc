@@ -70,4 +70,23 @@ spec:
     targetPort: 9090
     protocol: TCP
   type: ClusterIP
-                   
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: watcher-proc-monitor
+  namespace: watcher
+  labels:
+    app: watcher-proc
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: watcher-proc
+  namespaceSelector:
+    matchNames:
+      - watcher
+  endpoints:
+    - port: http-metrics
+      path: /metrics
+      interval: 30s

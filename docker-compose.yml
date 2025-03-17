@@ -19,4 +19,4 @@ services:
       - /usr/src:/usr/src:ro
     environment:
       - PYTHONUNBUFFERED=1
-      - LOG_LEVEL=DEBUG
+      - LOG_LEVEL=INFO
