@@ -5,5 +5,6 @@ class ProcessType(Enum):
     UNKNOWN = auto()
     GCC = auto()
     CLANG = auto()
-    PYTHON = auto()    # 향후 구현
+    GPP = auto()
+    PYTHON = auto()   
     USER_BINARY = auto() 

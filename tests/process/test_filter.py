@@ -13,6 +13,7 @@ class TestProcessFilter:
             mock_settings.PROCESS_PATTERNS = {
                 'GCC': ['/usr/bin/gcc'],
                 'CLANG': ['/usr/bin/clang'],
+                'GPP': ['/usr/bin/g++'],
                 'PYTHON': ['/usr/bin/python3']
             }
             yield mock_settings
@@ -42,6 +43,7 @@ class TestProcessFilter:
         test_cases = [
             ('/usr/bin/gcc', ProcessType.GCC),
             ('/usr/bin/clang', ProcessType.CLANG),
+            ('/usr/bin/g++', ProcessType.GPP),
             ('/usr/bin/python3', ProcessType.PYTHON),
             ('/usr/bin/unknown', ProcessType.UNKNOWN)
         ]

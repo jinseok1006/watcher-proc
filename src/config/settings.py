@@ -13,15 +13,22 @@ class Settings:
     PROCESS_PATTERNS: Dict[str, List[str]] = {
         "GCC": ["/usr/bin/x86_64-linux-gnu-gcc-13", "/usr/bin/x86_64-linux-gnu-gcc-12"],
         "CLANG": [
-            "/usr/lib/llvm-18/bin/clang",
-            "/usr/lib/llvm-17/bin/clang",
-            "/usr/lib/llvm-16/bin/clang",
+            "/usr/lib/llvm-13/bin/clang",
+            "/usr/lib/llvm-12/bin/clang",
+        ],
+        "GPP": [
+            "/usr/bin/x86_64-linux-gnu-g++-13",
+            "/usr/bin/x86_64-linux-gnu-g++-12",
+            "/usr/bin/g++",
         ],
         "PYTHON": [
+            "/usr/bin/python3.13",
             "/usr/bin/python3.12",
             "/usr/bin/python3.11",
             "/usr/bin/python3.10",
             "/usr/bin/python3.9",
+            "/usr/bin/python3.8",
+            "/usr/bin/python3.7",
         ],
     }
 

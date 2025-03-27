@@ -8,6 +8,7 @@ from ..homework.checker import HomeworkChecker
 from ..process.types import ProcessType
 from ..parser.base import Parser
 from ..parser.compiler import CCompilerParser
+from ..parser.cpp_compiler import CPPCompilerParser
 from ..parser.python import PythonParser
 from ..utils.logging import get_logger
 
@@ -24,6 +25,7 @@ class HomeworkHandler(EventHandler[EventBuilder, EventBuilder]):
         self.hw_checker = homework_checker
         self.gcc_parser = CCompilerParser(ProcessType.GCC)
         self.clang_parser = CCompilerParser(ProcessType.CLANG)
+        self.gpp_parser = CPPCompilerParser(ProcessType.GPP)
         self.python_parser = PythonParser(ProcessType.PYTHON)
     
     def _get_parser(self, process_type: ProcessType) -> Optional[Parser]:
@@ -32,6 +34,8 @@ class HomeworkHandler(EventHandler[EventBuilder, EventBuilder]):
             return self.gcc_parser
         elif process_type == ProcessType.CLANG:
             return self.clang_parser
+        elif process_type == ProcessType.GPP:
+            return self.gpp_parser
         elif process_type == ProcessType.PYTHON:
             return self.python_parser
         return None

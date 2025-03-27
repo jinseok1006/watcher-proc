@@ -46,6 +46,19 @@ def compiler_event():
     )
 
 @pytest.fixture
+def gpp_event():
+    """g++ 컴파일러 실행 이벤트를 생성합니다."""
+    return RawBpfEvent(
+        hostname="jcode-os-1-202012180-hash",
+        pid=1234,
+        binary_path="/usr/bin/g++",        # g++ 컴파일러 실행 파일
+        cwd="/home/student/hw1",           # 과제 디렉토리
+        args="g++ -o main main.cpp",       # 컴파일 명령어
+        error_flags="0",
+        exit_code=0
+    )
+
+@pytest.fixture
 def binary_event():
     """컴파일된 바이너리 실행 이벤트를 생성합니다."""
     return RawBpfEvent(
@@ -63,6 +76,18 @@ def compiler_builder(compiler_event):
     """컴파일러 이벤트에 대한 EventBuilder를 생성합니다."""
     builder = EventBuilder(compiler_event)
     builder.process = ProcessTypeInfo(type=ProcessType.GCC)
+    builder.metadata = EventMetadata(
+        timestamp=datetime.now(timezone.utc),
+        class_div="os-1",
+        student_id="202012180"
+    )
+    return builder
+
+@pytest.fixture
+def gpp_builder(gpp_event):
+    """g++ 컴파일러 이벤트에 대한 EventBuilder를 생성합니다."""
+    builder = EventBuilder(gpp_event)
+    builder.process = ProcessTypeInfo(type=ProcessType.GPP)
     builder.metadata = EventMetadata(
         timestamp=datetime.now(timezone.utc),
         class_div="os-1",
@@ -207,4 +232,76 @@ async def test_handle_python_in_homework_dir(handler, python_builder):
     assert result == python_builder
     assert isinstance(result.homework, HomeworkInfo)
     assert result.homework.homework_dir == "/home/student/hw1"
-    assert result.homework.source_file == "/home/student/hw1/solution.py" 
+    assert result.homework.source_file == "/home/student/hw1/solution.py"
+
+@pytest.mark.asyncio
+async def test_handle_gpp_compilation_in_homework_dir(handler, gpp_builder):
+    """과제 디렉토리 내에서의 g++ 컴파일 이벤트 처리를 테스트합니다."""
+    # Given
+    next_handler = Mock()
+    next_handler.handle = AsyncMock(return_value=gpp_builder)
+    handler.set_next(next_handler)
+    
+    # When
+    result = await handler.handle(gpp_builder)
+    
+    # Then
+    assert result == gpp_builder
+    assert isinstance(result.homework, HomeworkInfo)
+    assert result.homework.homework_dir == "/home/student/hw1"
+    assert result.homework.source_file == "/home/student/hw1/main.cpp"  # 절대 경로로 변경
+    next_handler.handle.assert_awaited_once_with(gpp_builder)
+
+@pytest.mark.asyncio
+async def test_handle_gpp_with_multiple_source_files(handler, gpp_builder):
+    """여러 C++ 소스 파일을 처리하는 g++ 이벤트를 테스트합니다."""
+    # Given
+    gpp_builder.base = RawBpfEvent(
+        hostname="jcode-os-1-202012180-hash",
+        pid=1234,
+        binary_path="/usr/bin/g++",
+        cwd="/home/student/hw1",
+        args="g++ -o program main.cpp helper.cc utils.cxx",  # 여러 확장자의 C++ 파일
+        error_flags="0",
+        exit_code=0
+    )
+    next_handler = Mock()
+    next_handler.handle = AsyncMock(return_value=gpp_builder)
+    handler.set_next(next_handler)
+    
+    # When
+    result = await handler.handle(gpp_builder)
+    
+    # Then
+    assert result == gpp_builder
+    assert isinstance(result.homework, HomeworkInfo)
+    assert result.homework.homework_dir == "/home/student/hw1"
+    assert result.homework.source_file == "/home/student/hw1/main.cpp"  # 첫 번째 소스 파일
+    next_handler.handle.assert_awaited_once_with(gpp_builder)
+
+@pytest.mark.asyncio
+async def test_handle_gpp_with_c_source_file(handler, gpp_builder):
+    """g++로 C 소스 파일을 컴파일하는 이벤트를 테스트합니다."""
+    # Given
+    gpp_builder.base = RawBpfEvent(
+        hostname="jcode-os-1-202012180-hash",
+        pid=1234,
+        binary_path="/usr/bin/g++",
+        cwd="/home/student/hw1",
+        args="g++ -o program main.c",  # C 파일을 g++로 컴파일
+        error_flags="0",
+        exit_code=0
+    )
+    next_handler = Mock()
+    next_handler.handle = AsyncMock(return_value=gpp_builder)
+    handler.set_next(next_handler)
+    
+    # When
+    result = await handler.handle(gpp_builder)
+    
+    # Then
+    assert result == gpp_builder
+    assert isinstance(result.homework, HomeworkInfo)
+    assert result.homework.homework_dir == "/home/student/hw1"
+    assert result.homework.source_file == "/home/student/hw1/main.c"
+    next_handler.handle.assert_awaited_once_with(gpp_builder) 
