@@ -3,7 +3,6 @@
 이벤트에 메타데이터(타임스탬프, 분반, 학번 등)를 추가합니다.
 """
 
-import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -17,15 +16,12 @@ class EnrichmentHandler(EventHandler[EventBuilder, EventBuilder]):
     def __init__(self):
         super().__init__()
         self.logger = get_logger(__name__)
-        self._hostname_pattern = re.compile(
-            r"jcode-(?P<class_div>[\w-]+)-(?P<student_id>\d+)-\w+"
-        )
         
     async def handle(self, builder: EventBuilder) -> Optional[EventBuilder]:
         """이벤트 처리
         
         Args:
-            builder: 이벤트 빌더
+            builder: 이벤트 빌더l
             
         Returns:
             처리된 이벤트 빌더 또는 None
@@ -41,16 +37,26 @@ class EnrichmentHandler(EventHandler[EventBuilder, EventBuilder]):
             )
             
             self.logger.debug("메타데이터 보강 시작")
-            match = self._hostname_pattern.match(builder.base.hostname)
             
-            if not match:
+            # 호스트네임을 대시(-)로 분리
+            parts = builder.base.hostname.split('-')
+
+            
+            # 최소 4개 부분이 필요: 접두사-과목명-분반-학번[-해시]
+            if len(parts) < 4:
                 # 핸들링 체인 종료 조건 (INFO)
-                self.logger.info(f"호스트네임 패턴 불일치로 처리 중단: {builder.base.hostname}")
+                self.logger.info(f"호스트네임 형식 불일치로 처리 중단: {builder.base.hostname}")
                 return None
-                
+            
+            self.logger.debug(f"호스트네임 분리 결과: {parts}")
+            
+            # 과목명-분반을 class_div로 합침
+            class_div = f"{parts[1]}-{parts[2]}"
+            student_id = parts[3]
+            
             builder.metadata = EventMetadata(
-                class_div=match.group("class_div"),
-                student_id=match.group("student_id"),
+                class_div=class_div,
+                student_id=student_id,
                 timestamp=datetime.now(timezone.utc)
             )
             
@@ -65,4 +71,4 @@ class EnrichmentHandler(EventHandler[EventBuilder, EventBuilder]):
             
         except Exception as e:
             self.logger.error(f"메타데이터 보강 실패: {str(e)}")
-            return None 
+            return None
