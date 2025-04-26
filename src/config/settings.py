@@ -45,7 +45,7 @@ class Settings:
     def __init__(self):
         # API 설정
         self.api_endpoint = os.getenv("API_ENDPOINT", "http://localhost:8000")
-        self.api_timeout = int(os.getenv("API_TIMEOUT", "10"))
+        self.api_timeout = int(os.getenv("API_TIMEOUT", "20"))
 
         # 로깅 설정
         self.log_level = os.getenv("LOG_LEVEL", "INFO").upper()
