@@ -36,6 +36,12 @@ class PythonParser(Parser):
                 return CommandResult(source_files=[], cwd=cwd, process_type=self.process_type)
             
             args_list = args.split()
+            
+            # -m 옵션 체크
+            if '-m' in args_list:
+                self.logger.debug("[PythonParser] -m 옵션이 발견되어 무시됨")
+                return CommandResult(source_files=[], cwd=cwd, process_type=self.process_type)
+            
             potential_source = None
             for arg in args_list:
                 if arg.endswith('.py'):

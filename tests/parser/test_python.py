@@ -59,4 +59,22 @@ def test_no_py_file(parser):
     
     # 빈 인자
     result = parser.parse("", "/home/student/hw1")
+    assert result.source_files == []
+
+def test_m_option_cases(parser):
+    """다양한 -m 옵션 케이스 테스트"""
+    # 기본적인 -m 옵션
+    result = parser.parse("-m pytest", "/home/student/hw1")
+    assert result.source_files == []
+    
+    # -m 옵션과 함께 .py 파일이 있는 경우
+    result = parser.parse("-m pytest test_file.py", "/home/student/hw1")
+    assert result.source_files == []
+    
+    # -m 옵션이 중간에 있는 경우
+    result = parser.parse("--verbose -m pytest test_file.py", "/home/student/hw1")
+    assert result.source_files == []
+    
+    # -m 옵션이 여러 인자와 함께 있는 경우
+    result = parser.parse("-m pytest test_file.py --verbose -v", "/home/student/hw1")
     assert result.source_files == [] 
