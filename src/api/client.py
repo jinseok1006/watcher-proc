@@ -28,8 +28,9 @@ class APIClient:
                     self.logger.info(f"API 성공: endpoint={endpoint}")
                     return True
 
-        except Exception:
-            self.logger.exception(f"API 오류 발생: endpoint={endpoint}")
+        except Exception as e :
+            self.logger.error(f"API 오류 : endpoint={endpoint}, error={repr(e)}")
+            # self.logger.exception(f"API 오류: endpoint={endpoint}")
             return False
 
     async def send_binary_execution(self, event: Event) -> bool:
