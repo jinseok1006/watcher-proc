@@ -23,13 +23,13 @@ class APIClient:
                 ) as response:
                     if response.status >= 400:
                         error_text = await response.text()
-                        self.logger.error(f"API 실패: status={response.status}, endpoint={endpoint}")
+                        self.logger.error(f"API 실패: status={response.status}, endpoint={endpoint}, error={error_text}")
                         return False
                     self.logger.info(f"API 성공: endpoint={endpoint}")
                     return True
-                    
-        except Exception as e:
-            self.logger.error(f"API 오류: endpoint={endpoint}, error={str(e)}")
+
+        except Exception:
+            self.logger.exception(f"API 오류 발생: endpoint={endpoint}")
             return False
 
     async def send_binary_execution(self, event: Event) -> bool:

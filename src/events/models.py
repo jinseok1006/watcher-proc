@@ -44,7 +44,7 @@ class Event:
     @property
     def is_compilation(self) -> bool:
         """컴파일 이벤트 여부"""
-        return self.process.type in (ProcessType.GCC, ProcessType.CLANG)
+        return self.process.type in (ProcessType.GCC, ProcessType.CLANG, ProcessType.GPP)
 
     @property
     def is_execution(self) -> bool:

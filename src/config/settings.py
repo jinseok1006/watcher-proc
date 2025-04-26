@@ -19,7 +19,6 @@ class Settings:
         "GPP": [
             "/usr/bin/x86_64-linux-gnu-g++-13",
             "/usr/bin/x86_64-linux-gnu-g++-12",
-            "/usr/bin/g++",
         ],
         "PYTHON": [
             "/usr/bin/python3.13",
