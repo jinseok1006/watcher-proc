@@ -45,10 +45,10 @@ class Application:
             set_hostname(None)
 
     async def process_events(self):
-        """이벤트 처리 루프"""
+        """이벤트 처리 루프 - 동시 처리 지원"""
         while self.is_running:
             event = await self.event_queue.get()
-            await self.handle_event(event)
+            asyncio.create_task(self.handle_event(event))
             self.event_queue.task_done()
 
     async def start(self):
